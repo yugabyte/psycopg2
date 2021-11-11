@@ -32,6 +32,9 @@ trap "rm -r ${tmpdir}" EXIT
 cd "${tmpdir}"
 $py -m zipfile -e "${wheel}" .
 
+# NOMERGE: debug
+strip --help
+
 find . -name *.so -ls -exec strip "$@" {} \;
 # Display the size after strip
 find . -name *.so -ls

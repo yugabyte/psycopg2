@@ -12,7 +12,7 @@ dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 prjdir="$( cd "${dir}/../.." && pwd )"
 
 brew update
-brew install gnu-sed postgresql@14
+brew install coreutils gnu-sed postgresql@14
 # Fetch 14.1 if 14.0 is still the default  version
 brew reinstall postgresql
 
@@ -47,6 +47,7 @@ fi
 # Build the wheels
 wheeldir="${prjdir}/wheels"
 pip wheel -w ${wheeldir} .
+"${dir}/strip_wheel.sh" ${wheeldir}/*.whl -d
 delocate-listdeps ${wheeldir}/*.whl
 
 # Check where is the libpq. I'm gonna kill it for testing
