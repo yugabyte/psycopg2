@@ -53,6 +53,8 @@
     <None Include="lib\extras.py" />
     <None Include="lib\__init__.py" />
     <None Include="lib\pool.py" />
+    <None Include="lib\policies.py" />
+    <None Include="lib\loadbalancingproperties.py" />
     <None Include="lib\tz.py" />
     <None Include="psycopg\adapter_asis.h" />
     <None Include="psycopg\adapter_binary.h" />
