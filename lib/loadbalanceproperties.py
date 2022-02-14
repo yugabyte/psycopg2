@@ -12,7 +12,7 @@ class LoadBalanceProperties:
         self.originalProperties = kwargs
         self.hasLoadBalance = False
         self.placements = ''
-        self.ybProperties = {}
+        self.ybProperties = self.originalProperties
         self.ybDSN = None
         if self.originalDSN != None :
             self.ybDSN = self.processURL()

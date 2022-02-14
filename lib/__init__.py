@@ -121,6 +121,7 @@ def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
     library: the list of supported parameters depends on the library version.
 
     """
+    
     kwasync = {}
     if 'async' in kwargs:
         kwasync['async'] = kwargs.pop('async')
@@ -130,12 +131,12 @@ def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
     lbprops = LoadBalanceProperties(dsn, **kwargs)
     if lbprops.hasLoadBalanced() :
         lock.acquire()
-        print('Is load Balanced')
-        conn = getConnectionBalanced(lbprops, connection_factory, cursor_factory)
+        # print('Is load Balanced')
+        conn = getConnectionBalanced(lbprops, connection_factory, cursor_factory, **kwasync)
         lock.release()
         return conn
     else :
-        print('Failed to apply load balancing, Trying normal connection')
+        # print('Failed to apply load balancing, Trying normal connection')
         dsn = lbprops.getStrippedDSN()
         kwargs = lbprops.getStrippedProperties()
         dsn = _ext.make_dsn(dsn, **kwargs)
@@ -144,14 +145,8 @@ def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
             conn.cursor_factory = cursor_factory
         return conn
 
-def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None):
+def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kwasync):
     kwargs = lbprops.getStrippedProperties()
-    kwasync = {}
-    if 'async' in kwargs:
-        kwasync['async'] = kwargs.pop('async')
-    if 'async_' in kwargs:
-        kwasync['async_'] = kwargs.pop('async_')
-    
     loadbalancer = lbprops.getAppropriateLoadBalancer()
     dsn = lbprops.getStrippedDSN()
     unreachableHosts = loadbalancer.getUnreachableHosts()
