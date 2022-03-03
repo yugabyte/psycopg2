@@ -19,7 +19,6 @@ class LoadBalanceProperties:
         if self.originalDSN != None :
             self.ybDSN = self.processURL()
         else:
-            # print('Going to process properties')
             self.ybProperties = self.processProperties()
         
 
@@ -56,7 +55,6 @@ class LoadBalanceProperties:
                 self.hasLoadBalance = True
             if 'topology_keys' in backup_dict:
                 self.placements = backup_dict.pop('topology_keys')
-                # print('Placements', self.placements)
         return backup_dict
 
 
@@ -79,13 +77,11 @@ class LoadBalanceProperties:
         if self.placements == '':
             ld = LoadBalanceProperties.CONNECTION_MANAGER_MAP.get(self.SIMPLE_LB)
             if ld == None:
-                # print('Returning cluster aware load balancer')
                 ld = ClusterAwareLoadBalancer.getInstance()
                 LoadBalanceProperties.CONNECTION_MANAGER_MAP[self.SIMPLE_LB] = ld
         else:
             ld = LoadBalanceProperties.CONNECTION_MANAGER_MAP.get(self.placements)
             if ld == None :
-                # print('Returning topology aware load balancer')
                 ld = TopologyAwareLoadBalancer(self.placements)
                 LoadBalanceProperties.CONNECTION_MANAGER_MAP[self.placements] = ld
         return ld

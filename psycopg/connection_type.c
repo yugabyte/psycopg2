@@ -171,6 +171,7 @@ psyco_conn_close(connectionObject *self, PyObject *dummy)
         PyObject* tmp1 = PyObject_CallMethodObjArgs(
                     loadbalancer, updateConnectionMap, host,incDec, NULL);
     }
+    
     Dprintf("psyco_conn_close: closing connection at %p", self);
     conn_close(self);
     Dprintf("psyco_conn_close: connection at %p closed", self);

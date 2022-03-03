@@ -18,19 +18,6 @@ class ClusterAwareLoadBalancer:
     hostPortMap_public = {}
     unreachableHosts = []
     GET_SERVERS_QUERY = "select * from yb_servers()"
-    REFRESH_LIST_SECONDS = 30
-
-    # def __init__(self):
-    #     self.GET_SERVERS_QUERY = "select * from yb_servers()"
-    #     self.REFRESH_LIST_SECONDS = 300
-    #     self.lastServerListFetchTime = 0
-    #     self.servers = []
-    #     self.hostToNumConnMap = {}
-    #     self.hostPortMap = {}
-    #     self.hostPortMap_public = {}
-    #     self.unreachableHosts = []
-    #     self.GET_SERVERS_QUERY = "select * from yb_servers()"
-    #     self.REFRESH_LIST_SECONDS = 300
 
     def getInstance():
         if ClusterAwareLoadBalancer.instance == None:
@@ -48,7 +35,6 @@ class ClusterAwareLoadBalancer:
         chosenHost = ''
         minConnectionsHostList = []
         min = sys.maxsize
-        # self.printHostToConnMap()
         for h in self.hostToNumConnMap.keys():
             if h in failedhosts:
                 continue
@@ -73,9 +59,6 @@ class ClusterAwareLoadBalancer:
         currentTimeInSeconds = time.time()
         diff = currentTimeInSeconds - self.lastServerListFetchTime
         firstTime = not self.servers
-        # print('First time', firstTime)
-        # print('diff > self.REFRESH_LIST_SECONDS', diff > self.REFRESH_LIST_SECONDS)
-        # print('diff', diff)
         return (firstTime or diff > self.REFRESH_LIST_SECONDS)
 
     def getCurrentServers(self, conn):
@@ -115,10 +98,8 @@ class ClusterAwareLoadBalancer:
     def refresh(self, conn):
         if not self.needsRefresh():
             return True
-        # print('Refreshing server list')
         currTime = time.time()
         self.servers = self.getCurrentServers(conn)
-        # print(self.servers)
         if not self.servers:
             return False
         self.lastServerListFetchTime = currTime
@@ -130,7 +111,6 @@ class ClusterAwareLoadBalancer:
 
     def getServers(self):
         return self.servers
-
 
     def updateConnectionMap(self, host, incDec):
         currentCount = self.hostToNumConnMap.get(host)
@@ -184,7 +164,6 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
                     self.allowedPlacements[regionandzone[1]] = zoneset
     
     def getCurrentServers(self, conn):
-        # print('In topology aware getCurrentServers')
         cur = conn.cursor()
         cur.execute(self.GET_SERVERS_QUERY)
         rs = cur.fetchall()

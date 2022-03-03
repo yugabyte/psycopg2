@@ -125,9 +125,9 @@ host_get(connInfoObject *self)
 }
 
 static const char hostaddr_doc[] =
-"The server host name of the connection.\n"
+"The server host ip of the connection.\n"
 "\n"
-"This can be a host name, an IP address, or a directory path if the\n"
+"This can be  an IP address if the\n"
 "connection is via Unix socket. (The path case can be distinguished\n"
 "because it will always be an absolute path, beginning with ``/``.)\n"
 "\n"

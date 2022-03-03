@@ -83,9 +83,6 @@ import re
 import psycopg2.extensions
 import threading
 
-# lock = threading.Lock()
-
-
 def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
     """
     Create a new database connection.
@@ -130,13 +127,10 @@ def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
 
     lbprops = LoadBalanceProperties(dsn, **kwargs)
     if lbprops.hasLoadBalanced() :
-        # lock.acquire()
-        # print('Is load Balanced')
         conn = getConnectionBalanced(lbprops, connection_factory, cursor_factory, **kwasync)
-        # lock.release()
         return conn
     else :
-        # print('Failed to apply load balancing, Trying normal connection')
+        print('Failed to apply load balancing, Trying normal connection')
         dsn = lbprops.getStrippedDSN()
         kwargs = lbprops.getStrippedProperties()
         dsn = _ext.make_dsn(dsn, **kwargs)
@@ -155,7 +149,6 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
     dsn = _ext.make_dsn(dsn,**kwargs)
 
     if chosenHost == '':
-        # dsn = _ext.make_dsn(dsn, **kwargs)
         controlConnection = _connect(dsn, connection_factory=connection_factory, **kwasync)
         if cursor_factory is not None:
             controlConnection.cursor_factory = cursor_factory
@@ -176,8 +169,6 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
             PortRegex = re.compile(r'port( )*=( )*[0-9]*( )?')
             dsn = HostRegex.sub(host_parameter, dsn)
             dsn = PortRegex.sub(port_parameter, dsn)
-            # print('DSN',dsn)
-            # dsn = _ext.make_dsn(dsn, **kwargs)
             newconn = _connect(dsn, connection_factory=connection_factory, **kwasync)
             if cursor_factory is not None:
                 newconn.cursor_factory = cursor_factory
