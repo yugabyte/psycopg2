@@ -83,7 +83,7 @@ import re
 import psycopg2.extensions
 import threading
 
-lock = threading.Lock()
+# lock = threading.Lock()
 
 
 def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
@@ -130,10 +130,10 @@ def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
 
     lbprops = LoadBalanceProperties(dsn, **kwargs)
     if lbprops.hasLoadBalanced() :
-        lock.acquire()
+        # lock.acquire()
         # print('Is load Balanced')
         conn = getConnectionBalanced(lbprops, connection_factory, cursor_factory, **kwasync)
-        lock.release()
+        # lock.release()
         return conn
     else :
         # print('Failed to apply load balancing, Trying normal connection')

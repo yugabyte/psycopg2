@@ -3,6 +3,8 @@ from psycopg2.policies import ClusterAwareLoadBalancer,TopologyAwareLoadBalancer
 class LoadBalanceProperties:
 
     CONNECTION_MANAGER_MAP = {}
+    placements = ''
+    SIMPLE_LB = 'simple'
 
     def __init__(self, dsn, **kwargs):
         self.SIMPLE_LB = 'simple'
