@@ -91,7 +91,13 @@ class ClusterAwareLoadBalancer:
         
     def getPrivateOrPublicServers(self, useHostColumn, privateHosts, publicHosts):
         if useHostColumn == None :
-            return None
+            print('Either private or public should have matched with one of the servers. Using private addresses.')
+            if not publicHosts:
+                return privateHosts
+            if not privateHosts:
+                return publicHosts
+            else :
+                return None
         currentHosts = privateHosts if useHostColumn else publicHosts
         return currentHosts
 
