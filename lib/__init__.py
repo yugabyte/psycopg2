@@ -102,7 +102,7 @@ def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
     - *user*: user name used to authenticate
     - *password*: password used to authenticate
     - *host*: database host address (defaults to UNIX socket if not provided)
-    - *port*: connection port number (defaults to 5432 if not provided)
+    - *port*: connection port number (defaults to 5433 if not provided)
 
     Using the *connection_factory* parameter a different class or connections
     factory can be specified. It should be a callable object taking a dsn
