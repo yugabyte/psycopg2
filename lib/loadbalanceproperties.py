@@ -8,11 +8,11 @@ class LoadBalanceProperties:
 
     def __init__(self, dsn, **kwargs):
         self.SIMPLE_LB = 'simple'
-        self.LOAD_BALANCE_PROPERTY_KEY = 'load-balance'
+        self.LOAD_BALANCE_PROPERTY_KEY = 'load_balance'
         self.EQUALS = '='
         self.originalDSN = dsn
         self.originalProperties = kwargs
-        self.hasLoadBalance = False
+        self.loadbalance = False
         self.placements = ''
         self.ybProperties = self.originalProperties
         self.ybDSN = None
@@ -33,7 +33,7 @@ class LoadBalanceProperties:
             lb_parts = list(filter(('').__ne__, lb_parts))
             propValue = lb_parts[1].lower().strip()
             if propValue == 'true':
-                self.hasLoadBalance = True
+                self.loadbalance = True
             sb = ClusterAwareRegex.sub('',self.originalDSN)
 
             TopologyAwareRegex = re.compile(r'topology_keys( )*=( )*(\S)*( )?')
@@ -52,7 +52,7 @@ class LoadBalanceProperties:
             propValue = backup_dict.pop('load_balance')
             propValue = propValue.lower().strip()
             if propValue == 'true':
-                self.hasLoadBalance = True
+                self.loadbalance = True
             if 'topology_keys' in backup_dict:
                 self.placements = backup_dict.pop('topology_keys')
         return backup_dict
@@ -70,8 +70,8 @@ class LoadBalanceProperties:
     def getStrippedProperties(self):
         return self.ybProperties
 
-    def hasLoadBalanced(self):
-        return self.hasLoadBalance
+    def hasLoadBalance(self):
+        return self.loadbalance
 
     def getAppropriateLoadBalancer(self):
         if self.placements == '':

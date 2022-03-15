@@ -126,18 +126,19 @@ def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
         kwasync['async_'] = kwargs.pop('async_')
 
     lbprops = LoadBalanceProperties(dsn, **kwargs)
-    if lbprops.hasLoadBalanced() :
+    if lbprops.hasLoadBalance() :
         conn = getConnectionBalanced(lbprops, connection_factory, cursor_factory, **kwasync)
-        return conn
-    else :
+        if conn != None:
+            return conn
         print('Failed to apply load balancing, Trying normal connection')
-        dsn = lbprops.getStrippedDSN()
-        kwargs = lbprops.getStrippedProperties()
-        dsn = _ext.make_dsn(dsn, **kwargs)
-        conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
-        if cursor_factory is not None:
-            conn.cursor_factory = cursor_factory
-        return conn
+    
+    dsn = lbprops.getStrippedDSN()
+    kwargs = lbprops.getStrippedProperties()
+    dsn = _ext.make_dsn(dsn, **kwargs)
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+    if cursor_factory is not None:
+        conn.cursor_factory = cursor_factory
+    return conn
 
 def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kwasync):
     kwargs = lbprops.getStrippedProperties()

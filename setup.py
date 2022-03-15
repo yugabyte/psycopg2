@@ -546,7 +546,7 @@ except Exception:
     print("failed to read readme: ignoring...")
     readme = __doc__
 
-setup(name="PythonSmartDriver",
+setup(name="psycopg2-yb",
       version=PSYCOPG_VERSION,
       author="Federico Di Gregorio",
       author_email="fog@initd.org",
