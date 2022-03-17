@@ -10,7 +10,7 @@ class ClusterAwareLoadBalancer:
 
     instance = None
     GET_SERVERS_QUERY = "select * from yb_servers()"
-    REFRESH_LIST_SECONDS = 30
+    REFRESH_LIST_SECONDS = 300
     lastServerListFetchTime = 0
     servers = []
     hostToNumConnMap = {}
