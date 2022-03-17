@@ -899,7 +899,7 @@ The ``connection`` class
         Example::
 
             >>> conn.get_dsn_parameters()
-            {'dbname': 'test', 'user': 'postgres', 'port': '5432', 'sslmode': 'prefer'}
+            {'dbname': 'yugabyte', 'user': 'yugabyte', 'port': '5433', 'sslmode': 'prefer'}
 
         Requires libpq >= 9.3.
 

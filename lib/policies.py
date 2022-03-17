@@ -10,7 +10,7 @@ class ClusterAwareLoadBalancer:
 
     instance = None
     GET_SERVERS_QUERY = "select * from yb_servers()"
-    REFRESH_LIST_SECONDS = 300
+    REFRESH_LIST_SECONDS = 30
     lastServerListFetchTime = 0
     servers = []
     hostToNumConnMap = {}
@@ -52,7 +52,7 @@ class ClusterAwareLoadBalancer:
         
         if chosenHost != '':
             self.updateConnectionMap(chosenHost,1)
-        
+            
         return chosenHost
     
     def needsRefresh(self):
@@ -149,24 +149,25 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
 
     def __init__(self, placementvalues):
         self.placements = placementvalues
-        self.allowedPlacements = {}
+        self.allowedPlacements = []
         self.populatePlacementMap()
     
+    def getPlacementMap(self, cloud, region, zone):
+        cp = {}
+        cp['cloud']=cloud
+        cp['region']=region
+        cp['zone']=zone
+        return cp
+
     def populatePlacementMap(self):
         placementstrings = self.placements.split(',')
         for pl in placementstrings :
-            regionandzone = pl.split('.')
-            if len(regionandzone) == 1 :
-                self.allowedPlacements[regionandzone[1]] = []
-            else :
-                Set = self.allowedPlacements.get(regionandzone[1])
-                if Set:
-                    Set.append(regionandzone[2])
-                    self.allowedPlacements[regionandzone[1]] = Set
-                else :
-                    zoneset = []
-                    zoneset.append(regionandzone[2])
-                    self.allowedPlacements[regionandzone[1]] = zoneset
+            placementParts = pl.split('.')
+            if len(placementParts) != 3:
+                print('Ignoring malformed topology-key property value')
+                continue
+            cp = self.getPlacementMap(placementParts[0],placementParts[1],placementParts[2])
+            self.allowedPlacements.append(cp)
     
     def getCurrentServers(self, conn):
         cur = conn.cursor()
@@ -183,18 +184,19 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         for row in rs :
             host = row[0]
             public_host = row[7]
+            cloud = row[4]
             region = row[5]
             zone = row[6]
             port = row[1]
             self.hostPortMap[host] = port
             self.hostPortMap_public[public_host] = port
-            zones = self.allowedPlacements.get(region)
+            cp = self.getPlacementMap(cloud,region,zone)
             if useHostColumn == None :
                 if hostConnectedTo == host :
                     useHostColumn = True
                 elif hostConnectedTo == public_host :
                     useHostColumn = False
-            if zones != None and (len(zones) == 0 or zone in zones) :
+            if cp in self.allowedPlacements :
                 currentPrivateIps.append(host)
                 currentPublicIps.append(public_host)
         

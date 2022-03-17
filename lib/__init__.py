@@ -148,13 +148,17 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
     failedHosts = unreachableHosts
     chosenHost = loadbalancer.getLeastLoadedServer(failedHosts)
     dsn = _ext.make_dsn(dsn,**kwargs)
-
-    if chosenHost == '':
+    needsRefresh = loadbalancer.needsRefresh()
+    if chosenHost == '' or needsRefresh:
         controlConnection = _connect(dsn, connection_factory=connection_factory, **kwasync)
         if cursor_factory is not None:
             controlConnection.cursor_factory = cursor_factory
         if not loadbalancer.refresh(controlConnection):
             return None
+        if needsRefresh:
+            dsnhost = controlConnection.info.host_addr
+            loadbalancer.updateConnectionMap(dsnhost, 1)
+            loadbalancer.updateConnectionMap(chosenHost, -1)
         controlConnection.close()
         chosenHost = loadbalancer.getLeastLoadedServer(failedHosts)
     
@@ -163,13 +167,7 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
     
     while chosenHost != '':
         try :
-            port = loadbalancer.getPort(chosenHost)
-            host_parameter = 'host=' + chosenHost + ' '
-            port_parameter = 'port=' + str(port) + ' '
-            HostRegex = re.compile(r'host( )*=( )*(\S)*( )?')
-            PortRegex = re.compile(r'port( )*=( )*[0-9]*( )?')
-            dsn = HostRegex.sub(host_parameter, dsn)
-            dsn = PortRegex.sub(port_parameter, dsn)
+            dsn = getDSNWithChosenHost(loadbalancer,dsn,chosenHost)
             newconn = _connect(dsn, connection_factory=connection_factory, **kwasync)
             if cursor_factory is not None:
                 newconn.cursor_factory = cursor_factory
@@ -188,3 +186,13 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
             except Exception:
                 print('For cleanup purposes')
             chosenHost = loadbalancer.getLeastLoadedServer(failedHosts)
+    
+def getDSNWithChosenHost(loadbalancer, dsn, chosenHost):
+    port = loadbalancer.getPort(chosenHost)
+    host_parameter = 'host=' + chosenHost + ' '
+    port_parameter = 'port=' + str(port) + ' '
+    HostRegex = re.compile(r'host( )*=( )*(\S)*( )?')
+    PortRegex = re.compile(r'port( )*=( )*[0-9]*( )?')
+    dsn = HostRegex.sub(host_parameter, dsn)
+    dsn = PortRegex.sub(port_parameter, dsn)
+    return dsn
