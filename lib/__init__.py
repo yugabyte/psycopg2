@@ -192,7 +192,7 @@ def getDSNWithChosenHost(loadbalancer, dsn, chosenHost):
     host_parameter = 'host=' + chosenHost + ' '
     port_parameter = 'port=' + str(port) + ' '
     HostRegex = re.compile(r'host( )*=( )*(\S)*( )?')
-    PortRegex = re.compile(r'port( )*=( )*[0-9]*( )?')
+    PortRegex = re.compile(r'port( )*=( )*[0-9]*(None)*( )?')
     dsn = HostRegex.sub(host_parameter, dsn)
     dsn = PortRegex.sub(port_parameter, dsn)
     return dsn
