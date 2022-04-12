@@ -160,6 +160,9 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
             loadbalancer.updateConnectionMap(dsnhost, 1)
             loadbalancer.updateConnectionMap(chosenHost, -1)
         controlConnection.close()
+
+        # Getting chosenHost again after refresh for the latest least loaded server
+        
         chosenHost = loadbalancer.getLeastLoadedServer(failedHosts)
     
     if chosenHost == '':

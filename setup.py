@@ -44,7 +44,7 @@ except ImportError:
 # Take a look at https://www.python.org/dev/peps/pep-0440/
 # for a consistent versioning pattern.
 
-PSYCOPG_VERSION = '2.9.3.dev0'
+PSYCOPG_VERSION = '2.9.3.post0'
 
 
 # note: if you are changing the list of supported Python version please fix
@@ -546,12 +546,12 @@ except Exception:
     print("failed to read readme: ignoring...")
     readme = __doc__
 
-setup(name="psycopg2-yb",
+setup(name="psycopg2-yugabytedb",
       version=PSYCOPG_VERSION,
-      author="Federico Di Gregorio",
-      author_email="fog@initd.org",
-      maintainer="Daniele Varrazzo",
-      maintainer_email="daniele.varrazzo@gmail.com",
+      author="Yugabyte",
+      author_email="pypi@yugabyte.com",
+      maintainer="Sfurti Sarah",
+      maintainer_email="ssarah@yugabyte.com",
       url="https://psycopg.org/",
       license="LGPL with exceptions",
       platforms=["any"],
@@ -567,7 +567,7 @@ setup(name="psycopg2-yb",
       project_urls={
           'Homepage': 'https://psycopg.org/',
           'Documentation': 'https://www.psycopg.org/docs/',
-          'Code': 'https://github.com/psycopg/psycopg2',
+          'Code': 'https://github.com/yugabyte/psycopg2',
           'Issue Tracker': 'https://github.com/psycopg/psycopg2/issues',
-          'Download': 'https://pypi.org/project/psycopg2/',
+          'Download': 'https://pypi.org/project/psycopg2-yugabytedb/',
       })

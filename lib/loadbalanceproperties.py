@@ -44,8 +44,8 @@ class LoadBalanceProperties:
                 tp_parts = list(filter(('').__ne__, tp_parts))
                 self.placements = tp_parts[1].strip()
                 sb = TopologyAwareRegex.sub('',sb)
-
         return sb
+        
     def processProperties(self):
         backup_dict = self.originalProperties
         if 'load_balance' in backup_dict:
