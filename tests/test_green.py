@@ -188,6 +188,7 @@ class CallbackErrorTestCase(ConnectingTestCase):
                 # the loop will be broken by a server error
                 continue
 
+    @skip_before_postgres(11, 2)
     def test_errors_on_connection(self):
         # Test error propagation in the different stages of the connection
         for i in range(100):

@@ -41,7 +41,7 @@ The module interface respects the standard defined in the |DBAPI|_.
     - `!user` -- user name used to authenticate
     - `!password` -- password used to authenticate
     - `!host` -- database host address (defaults to UNIX socket if not provided)
-    - `!port` -- connection port number (defaults to 5432 if not provided)
+    - `!port` -- connection port number (defaults to 5433 if not provided)
 
     Any other connection parameter supported by the client library/server can
     be passed either in the connection string or as a keyword. The PostgreSQL

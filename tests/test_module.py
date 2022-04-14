@@ -86,17 +86,17 @@ class ConnectTestCase(unittest.TestCase):
         self.assertEqual(self.args[0], 'user=postgres')
         psycopg2.connect(password='secret')
         self.assertEqual(self.args[0], 'password=secret')
-        psycopg2.connect(port=5432)
-        self.assertEqual(self.args[0], 'port=5432')
+        psycopg2.connect(port=5433)
+        self.assertEqual(self.args[0], 'port=5433')
         psycopg2.connect(sslmode='require')
         self.assertEqual(self.args[0], 'sslmode=require')
 
         psycopg2.connect(database='foo',
-            user='postgres', password='secret', port=5432)
+            user='postgres', password='secret', port=5433)
         self.assert_('dbname=foo' in self.args[0])
         self.assert_('user=postgres' in self.args[0])
         self.assert_('password=secret' in self.args[0])
-        self.assert_('port=5432' in self.args[0])
+        self.assert_('port=5433' in self.args[0])
         self.assertEqual(len(self.args[0].split()), 4)
 
     def test_generic_keywords(self):

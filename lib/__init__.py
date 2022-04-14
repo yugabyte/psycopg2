@@ -48,6 +48,7 @@ Homepage: https://psycopg.org/
 
 # Import the DBAPI-2.0 stuff into top-level module.
 
+from typing import List
 from psycopg2._psycopg import (                     # noqa
     BINARY, NUMBER, STRING, DATETIME, ROWID,
 
@@ -59,9 +60,11 @@ from psycopg2._psycopg import (                     # noqa
 
     _connect, apilevel, threadsafety, paramstyle,
     __version__, __libpq_version__,
+    connection, cursor as _cur, ConnectionInfo as _conninfo
 )
 
-
+from psycopg2.policies import ClusterAwareLoadBalancer,TopologyAwareLoadBalancer
+from psycopg2.loadbalanceproperties import LoadBalanceProperties
 # Register default adapters.
 
 from psycopg2 import extensions as _ext
@@ -76,6 +79,9 @@ from psycopg2._psycopg import Decimal as Adapter    # noqa
 _ext.register_adapter(Decimal, Adapter)
 del Decimal, Adapter
 
+import re
+import psycopg2.extensions
+import threading
 
 def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
     """
@@ -96,7 +102,7 @@ def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
     - *user*: user name used to authenticate
     - *password*: password used to authenticate
     - *host*: database host address (defaults to UNIX socket if not provided)
-    - *port*: connection port number (defaults to 5432 if not provided)
+    - *port*: connection port number (defaults to 5433 if not provided)
 
     Using the *connection_factory* parameter a different class or connections
     factory can be specified. It should be a callable object taking a dsn
@@ -112,15 +118,84 @@ def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
     library: the list of supported parameters depends on the library version.
 
     """
+    
     kwasync = {}
     if 'async' in kwargs:
         kwasync['async'] = kwargs.pop('async')
     if 'async_' in kwargs:
         kwasync['async_'] = kwargs.pop('async_')
 
+    lbprops = LoadBalanceProperties(dsn, **kwargs)
+    if lbprops.hasLoadBalance() :
+        conn = getConnectionBalanced(lbprops, connection_factory, cursor_factory, **kwasync)
+        if conn != None:
+            return conn
+        print('Failed to apply load balancing, Trying normal connection')
+    
+    dsn = lbprops.getStrippedDSN()
+    kwargs = lbprops.getStrippedProperties()
     dsn = _ext.make_dsn(dsn, **kwargs)
     conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
     if cursor_factory is not None:
         conn.cursor_factory = cursor_factory
-
     return conn
+
+def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kwasync):
+    kwargs = lbprops.getStrippedProperties()
+    loadbalancer = lbprops.getAppropriateLoadBalancer()
+    dsn = lbprops.getStrippedDSN()
+    unreachableHosts = loadbalancer.getUnreachableHosts()
+    failedHosts = unreachableHosts
+    chosenHost = loadbalancer.getLeastLoadedServer(failedHosts)
+    dsn = _ext.make_dsn(dsn,**kwargs)
+    needsRefresh = loadbalancer.needsRefresh()
+    if chosenHost == '' or needsRefresh:
+        controlConnection = _connect(dsn, connection_factory=connection_factory, **kwasync)
+        if cursor_factory is not None:
+            controlConnection.cursor_factory = cursor_factory
+        if not loadbalancer.refresh(controlConnection):
+            return None
+        if needsRefresh:
+            dsnhost = controlConnection.info.host_addr
+            loadbalancer.updateConnectionMap(dsnhost, 1)
+            loadbalancer.updateConnectionMap(chosenHost, -1)
+        controlConnection.close()
+
+        # Getting chosenHost again after refresh for the latest least loaded server
+        
+        chosenHost = loadbalancer.getLeastLoadedServer(failedHosts)
+    
+    if chosenHost == '':
+        return None
+    
+    while chosenHost != '':
+        try :
+            dsn = getDSNWithChosenHost(loadbalancer,dsn,chosenHost)
+            newconn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+            if cursor_factory is not None:
+                newconn.cursor_factory = cursor_factory
+            if not loadbalancer.refresh(newconn):
+                loadbalancer.updateConnectionMap(chosenHost, -1)
+                failedHosts.add(chosenHost)
+                loadbalancer.setForRefresh()
+            else:
+                return newconn
+        except OperationalError:
+            print('Couldnt connect to ', chosenHost, ' adding to failed list')
+            failedHosts.append(chosenHost)
+            loadbalancer.updateFailedHosts(chosenHost)
+            try :
+                newconn.close()
+            except Exception:
+                print('For cleanup purposes')
+            chosenHost = loadbalancer.getLeastLoadedServer(failedHosts)
+    
+def getDSNWithChosenHost(loadbalancer, dsn, chosenHost):
+    port = loadbalancer.getPort(chosenHost)
+    host_parameter = 'host=' + chosenHost + ' '
+    port_parameter = 'port=' + str(port) + ' '
+    HostRegex = re.compile(r'host( )*=( )*(\S)*( )?')
+    PortRegex = re.compile(r'port( )*=( )*[0-9]*(None)*( )?')
+    dsn = HostRegex.sub(host_parameter, dsn)
+    dsn = PortRegex.sub(port_parameter, dsn)
+    return dsn

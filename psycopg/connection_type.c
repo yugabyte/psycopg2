@@ -142,6 +142,36 @@ exit:
 static PyObject *
 psyco_conn_close(connectionObject *self, PyObject *dummy)
 {
+    /*
+    *
+    * Import the loadbalance module and get the appropriate loadbalancer
+    *
+    */
+    PyObject *m = PyImport_ImportModule("psycopg2.loadbalanceproperties");
+    PyObject *comp = PyObject_GetAttrString(m, "LoadBalanceProperties");
+    PyObject* loadbalancefunc = PyUnicode_FromString((char*)"getAppropriateLoadBalancer");
+    PyObject *loadbalancer = PyObject_CallMethodObjArgs(
+                comp, loadbalancefunc,comp, NULL);
+
+    
+    if (loadbalancer != NULL){
+        const char *val;
+        val = PQhostaddr(self->pgconn);
+        if (!val) {
+            Py_RETURN_NONE;
+        }
+        PyObject* host = conn_text_from_chars(self, val);
+        PyObject* incDec = PyInt_FromLong(-1);
+
+        /*
+        * update the connection map
+        */
+
+        PyObject* updateConnectionMap = PyUnicode_FromString((char*)"updateConnectionMap");
+        PyObject* tmp1 = PyObject_CallMethodObjArgs(
+                    loadbalancer, updateConnectionMap, host,incDec, NULL);
+    }
+    
     Dprintf("psyco_conn_close: closing connection at %p", self);
     conn_close(self);
     Dprintf("psyco_conn_close: connection at %p closed", self);

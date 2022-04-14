@@ -124,6 +124,28 @@ host_get(connInfoObject *self)
     return conn_text_from_chars(self->conn, val);
 }
 
+static const char hostaddr_doc[] =
+"The server host ip of the connection.\n"
+"\n"
+"This can be  an IP address if the\n"
+"connection is via Unix socket. (The path case can be distinguished\n"
+"because it will always be an absolute path, beginning with ``/``.)\n"
+"\n"
+".. seealso:: libpq docs for `PQhostaddr()`__ for details.\n"
+".. __: https://www.postgresql.org/docs/current/static/libpq-status.html"
+    "#LIBPQ-PQHOST";
+
+static PyObject *
+hostaddr_get(connInfoObject *self)
+{
+    const char *val;
+
+    val = PQhostaddr(self->conn->pgconn);
+    if (!val) {
+        Py_RETURN_NONE;
+    }
+    return conn_text_from_chars(self->conn, val);
+}
 
 static const char port_doc[] =
 "The port of the connection.\n"
@@ -536,6 +558,7 @@ static struct PyGetSetDef connInfoObject_getsets[] = {
     { "user", (getter)user_get, NULL, (char *)user_doc },
     { "password", (getter)password_get, NULL, (char *)password_doc },
     { "host", (getter)host_get, NULL, (char *)host_doc },
+    { "host_addr", (getter)hostaddr_get, NULL, (char *)hostaddr_doc },
     { "port", (getter)port_get, NULL, (char *)port_doc },
     { "options", (getter)options_get, NULL, (char *)options_doc },
     { "dsn_parameters", (getter)dsn_parameters_get, NULL,

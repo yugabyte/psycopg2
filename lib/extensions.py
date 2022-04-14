@@ -142,9 +142,14 @@ def make_dsn(dsn=None, **kwargs):
 
     # If no kwarg is specified don't mung the dsn, but verify it
     if not kwargs:
+        if not 'port' in dsn:
+            dsn += ' port=5433' 
         parse_dsn(dsn)
         return dsn
-
+    
+    #Set Default pot to 5433 if not specified
+    if not 'port' in kwargs:
+        kwargs['port'] = 5433
     # Override the dsn with the parameters
     if 'database' in kwargs:
         if 'dbname' in kwargs:
