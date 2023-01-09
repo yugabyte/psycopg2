@@ -6,6 +6,7 @@ import psycopg2
 import psycopg2.extensions
 
 
+
 class ClusterAwareLoadBalancer:
 
     instance = None
@@ -18,10 +19,13 @@ class ClusterAwareLoadBalancer:
     hostPortMap_public = {}
     unreachableHosts = []
     GET_SERVERS_QUERY = "select * from yb_servers()"
+    DEFAULT_REFRESH_INTERVAL = 300
+    refreshListSeconds = DEFAULT_REFRESH_INTERVAL
 
-    def getInstance():
+    def getInstance(self,refreshInterval):
         if ClusterAwareLoadBalancer.instance == None:
             ClusterAwareLoadBalancer.instance = ClusterAwareLoadBalancer()
+            ClusterAwareLoadBalancer.instance.refreshListSeconds = refreshInterval if refreshInterval > 0 else self.DEFAULT_REFRESH_INTERVAL 
         return ClusterAwareLoadBalancer.instance
 
     
@@ -147,11 +151,59 @@ class ClusterAwareLoadBalancer:
 
 class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
 
+    PRIMARY_PLACEMENTS = 1
+    FIRST_FALLBACK = 2
+    REST_OF_CLUSTER = -1
+    MAX_PREFERENCE_VALUE = 10
+
     def __init__(self, placementvalues):
         self.placements = placementvalues
-        self.allowedPlacements = []
-        self.populatePlacementMap()
-    
+        self.allowedPlacements = {}
+        self.fallbackPrivateIPs = {}
+        self.fallbackPublicIPs = {}
+        self.parseGeoLocations()
+
+    def parseGeoLocations(self):
+        values = self.placements.split(',')
+        for value in values:
+            v = value.split(':')
+            if len(v) > 2 or value[-1] == ':':
+               print('Invalid value part of property topology_keys:', value)
+            if len(v) == 1:
+                if self.PRIMARY_PLACEMENTS not in self.allowedPlacements:
+                    primary = []
+                    self.allowedPlacements[self.PRIMARY_PLACEMENTS] = primary
+                else:
+                    primary = self.allowedPlacements[self.PRIMARY_PLACEMENTS]
+                self.populatePlacementSet(v[0],primary)
+                self.allowedPlacements[self.PRIMARY_PLACEMENTS] = primary
+            else:
+                pref = int(v[1])
+                if pref == 1:
+                    primary= self.allowedPlacements[self.PRIMARY_PLACEMENTS]
+                    if not primary:
+                        primary = []
+                        self.allowedPlacements[self.PRIMARY_PLACEMENTS] = primary
+                    self.populatePlacementSet(v[0], primary)
+                elif pref > 1 and pref <= self.MAX_PREFERENCE_VALUE :
+                    fallbackPlacements = self.allowedPlacements[pref]
+                    if not fallbackPlacements:
+                        fallbackPlacements = []
+                        self.allowedPlacements[pref] = fallbackPlacements
+                    self.populatePlacementSet(v[0], fallbackPlacements)
+
+
+    def populatePlacementSet(self,placements, allowedPlacements):
+        pStrings = placements.split(',')
+        for pl in pStrings:
+            placementParts = pl.split('.')
+            if len(placementParts) != 3 or placementParts[0] == '*' or placementParts[1] == '*':
+                print('Ignoring malformed topology-key property value')
+                continue
+            cp = self.getPlacementMap(placementParts[0], placementParts[1], placementParts[2])
+
+        allowedPlacements.append(cp)
+
     def getPlacementMap(self, cloud, region, zone):
         cp = {}
         cp['cloud']=cloud
@@ -159,15 +211,6 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         cp['zone']=zone
         return cp
 
-    def populatePlacementMap(self):
-        placementstrings = self.placements.split(',')
-        for pl in placementstrings :
-            placementParts = pl.split('.')
-            if len(placementParts) != 3:
-                print('Ignoring malformed topology-key property value')
-                continue
-            cp = self.getPlacementMap(placementParts[0],placementParts[1],placementParts[2])
-            self.allowedPlacements.append(cp)
     
     def getCurrentServers(self, conn):
         cur = conn.cursor()
@@ -190,15 +233,66 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
             port = row[1]
             self.hostPortMap[host] = port
             self.hostPortMap_public[public_host] = port
-            cp = self.getPlacementMap(cloud,region,zone)
+            self.updateCurrentHostList(currentPrivateIps, currentPublicIps, host, public_host, cloud, region, zone)
             if useHostColumn == None :
                 if hostConnectedTo == host :
                     useHostColumn = True
                 elif hostConnectedTo == public_host :
                     useHostColumn = False
-            if cp in self.allowedPlacements :
-                currentPrivateIps.append(host)
-                currentPublicIps.append(public_host)
-        
         return self.getPrivateOrPublicServers(useHostColumn, currentPrivateIps, currentPublicIps)
+
+    def getPrivateOrPublicServers(self, useHostColumn, privateHosts, publicHosts):
+        servers = super().getPrivateOrPublicServers(useHostColumn, privateHosts, publicHosts)
+        if servers:
+            return servers
+        for i in range(self.FIRST_FALLBACK,self.MAX_PREFERENCE_VALUE + 1):
+            if self.fallbackPrivateIPs[i]:
+                return super().getPrivateOrPublicServers(useHostColumn, self.fallbackPrivateIPs[i], self.fallbackPublicIPs[i])
+
+        return super().getPrivateOrPublicServers(useHostColumn, self.fallbackPrivateIPs[self.REST_OF_CLUSTER], self.fallbackPublicIPs[self.REST_OF_CLUSTER])
+
+    def updateCurrentHostList(self, currentPrivateIps, currentPublicIps, host, public_host, cloud, region, zone):
+        cp = self.getPlacementMap(cloud, region, zone)
+        if cp in self.allowedPlacements[self.PRIMARY_PLACEMENTS]:
+            currentPrivateIps.append(host)
+            if len(public_host.strip()) != 0:
+                currentPublicIps.append(public_host)
+        else:
+            for key,value in self.allowedPlacements.items():
+                if cp in self.allowedPlacements[value]:
+                    if key not in self.fallbackPrivateIPs:
+                        hosts = []
+                        self.fallbackPrivateIPs[key] = hosts
+                    else:
+                        hosts = self.fallbackPrivateIPs[key]
+                    hosts.append(host)
+                    self.fallbackPrivateIPs[key] = hosts
+                    if len(public_host.strip()) != 0:
+                        if key not in self.fallbackPublicIPs:
+                            publicIPs = []
+                            self.fallbackPublicIPs[key] = publicIPs
+                        else:
+                            publicIPs = self.fallbackPublicIPs[key]
+                        publicIPs.append(public_host)
+                        self.fallbackPublicIPs[key] = publicIPs
+                    return
+
+                if self.REST_OF_CLUSTER not in self.fallbackPrivateIPs:
+                    remaininghosts = []
+                    self.fallbackPrivateIPs[self.REST_OF_CLUSTER] = remaininghosts
+                else:
+                    remaininghosts = self.fallbackPrivateIPs[self.REST_OF_CLUSTER]
+                remaininghosts.append(host)
+                self.fallbackPrivateIPs[self.REST_OF_CLUSTER] = remaininghosts
+                if len(public_host.strip()) != 0:
+                    if self.REST_OF_CLUSTER not in self.fallbackPublicIPs:
+                        remainingpublicIPs = []
+                        self.fallbackPublicIPs[self.REST_OF_CLUSTER] = remainingpublicIPs
+                    else:
+                        remainingpublicIPs = self.fallbackPublicIPs[self.REST_OF_CLUSTER]
+                    remainingpublicIPs.append(public_host)
+                    self.fallbackPublicIPs[self.REST_OF_CLUSTER] = remainingpublicIPs
+
+
+
         
