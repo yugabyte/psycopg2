@@ -22,10 +22,11 @@ class ClusterAwareLoadBalancer:
     DEFAULT_REFRESH_INTERVAL = 300
     refreshListSeconds = DEFAULT_REFRESH_INTERVAL
 
-    def getInstance(self,refreshInterval):
+
+    def getInstance(refreshInterval):
         if ClusterAwareLoadBalancer.instance == None:
             ClusterAwareLoadBalancer.instance = ClusterAwareLoadBalancer()
-            ClusterAwareLoadBalancer.instance.refreshListSeconds = refreshInterval if refreshInterval > 0 else self.DEFAULT_REFRESH_INTERVAL 
+            ClusterAwareLoadBalancer.instance.refreshListSeconds = refreshInterval if refreshInterval > 0 else 300 
         return ClusterAwareLoadBalancer.instance
 
     
@@ -36,6 +37,7 @@ class ClusterAwareLoadBalancer:
         return port
     
     def getLeastLoadedServer(self,failedhosts):
+        print(self.hostToNumConnMap)
         chosenHost = ''
         minConnectionsHostList = []
         min = sys.maxsize
@@ -157,6 +159,9 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
     MAX_PREFERENCE_VALUE = 10
 
     def __init__(self, placementvalues):
+        self.hostToNumConnMap = {}
+        self.hostPortMap = {}
+        self.hostPortMap_public = {}
         self.placements = placementvalues
         self.allowedPlacements = {}
         self.fallbackPrivateIPs = {}
@@ -180,13 +185,13 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
             else:
                 pref = int(v[1])
                 if pref == 1:
-                    primary= self.allowedPlacements[self.PRIMARY_PLACEMENTS]
+                    primary= self.allowedPlacements.get(self.PRIMARY_PLACEMENTS)
                     if not primary:
                         primary = []
                         self.allowedPlacements[self.PRIMARY_PLACEMENTS] = primary
                     self.populatePlacementSet(v[0], primary)
                 elif pref > 1 and pref <= self.MAX_PREFERENCE_VALUE :
-                    fallbackPlacements = self.allowedPlacements[pref]
+                    fallbackPlacements = self.allowedPlacements.get(pref)
                     if not fallbackPlacements:
                         fallbackPlacements = []
                         self.allowedPlacements[pref] = fallbackPlacements
@@ -251,15 +256,24 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
 
         return super().getPrivateOrPublicServers(useHostColumn, self.fallbackPrivateIPs[self.REST_OF_CLUSTER], self.fallbackPublicIPs[self.REST_OF_CLUSTER])
 
+    def checkIfPresent(self, cp, placements):
+        for placement in placements:
+            if cp == placement:
+                return True
+        
+        return False
+
     def updateCurrentHostList(self, currentPrivateIps, currentPublicIps, host, public_host, cloud, region, zone):
         cp = self.getPlacementMap(cloud, region, zone)
-        if cp in self.allowedPlacements[self.PRIMARY_PLACEMENTS]:
+        if self.checkIfPresent(cp, self.allowedPlacements[self.PRIMARY_PLACEMENTS]):
             currentPrivateIps.append(host)
             if len(public_host.strip()) != 0:
                 currentPublicIps.append(public_host)
         else:
+            print(cp)
+            print(self.allowedPlacements)
             for key,value in self.allowedPlacements.items():
-                if cp in self.allowedPlacements[value]:
+                if self.checkIfPresent(cp, value):
                     if key not in self.fallbackPrivateIPs:
                         hosts = []
                         self.fallbackPrivateIPs[key] = hosts

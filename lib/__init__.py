@@ -157,9 +157,14 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
             return None
         if needsRefresh:
             dsnhost = controlConnection.info.host_addr
+            print("dsn Host", dsnhost)
             loadbalancer.updateConnectionMap(dsnhost, 1)
             loadbalancer.updateConnectionMap(chosenHost, -1)
-        controlConnection.close()
+        
+        try:
+            controlConnection.close()
+        except Exception:
+            print("Could not close control connection")
 
         # Getting chosenHost again after refresh for the latest least loaded server
         
@@ -170,6 +175,7 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
     
     while chosenHost != '':
         try :
+            print("Chosen host:", chosenHost)
             dsn = getDSNWithChosenHost(loadbalancer,dsn,chosenHost)
             newconn = _connect(dsn, connection_factory=connection_factory, **kwasync)
             if cursor_factory is not None:
