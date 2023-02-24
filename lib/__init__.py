@@ -132,6 +132,7 @@ def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
             return conn
         print('Failed to apply load balancing, Trying normal connection')
     
+    print("No load Balance specified")
     dsn = lbprops.getStrippedDSN()
     kwargs = lbprops.getStrippedProperties()
     dsn = _ext.make_dsn(dsn, **kwargs)
@@ -192,6 +193,21 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
     
 def getDSNWithChosenHost(loadbalancer, dsn, chosenHost):
     port = loadbalancer.getPort(chosenHost)
+    """
+    Special case for connection URI
+    """
+    if 'postgresql://' in dsn or 'postgres://' in dsn:
+        if '@' in dsn :
+            host_parameter = '@' + chosenHost + ':' + str(port) + '/'
+            HostRegex = re.compile(r'@([^/]*)/')
+            dsn = HostRegex.sub(host_parameter, dsn)
+            return dsn
+        else :
+            host_parameter = '://' + chosenHost + ':' + str(port) + '/'
+            HostRegex = re.compile(r'://([^/]*)/')
+            dsn = HostRegex.sub(host_parameter, dsn)
+            return dsn
+
     host_parameter = 'host=' + chosenHost + ' '
     port_parameter = 'port=' + str(port) + ' '
     HostRegex = re.compile(r'host( )*=( )*(\S)*( )?')
