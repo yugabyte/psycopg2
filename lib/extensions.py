@@ -142,6 +142,7 @@ def make_dsn(dsn=None, **kwargs):
 
     # If no kwarg is specified don't mung the dsn, but verify it
     if not kwargs:
+        # If port is not specified make 5433 the default port
         if not 'port' in dsn:
             if 'postgresql://'  in dsn or 'postgres://'  in dsn:
                 if '@' in dsn :

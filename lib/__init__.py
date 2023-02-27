@@ -132,7 +132,6 @@ def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
             return conn
         print('Failed to apply load balancing, Trying normal connection')
     
-    print("No load Balance specified")
     dsn = lbprops.getStrippedDSN()
     kwargs = lbprops.getStrippedProperties()
     dsn = _ext.make_dsn(dsn, **kwargs)
