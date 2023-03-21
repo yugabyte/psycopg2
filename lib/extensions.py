@@ -142,12 +142,31 @@ def make_dsn(dsn=None, **kwargs):
 
     # If no kwarg is specified don't mung the dsn, but verify it
     if not kwargs:
+        # If port is not specified make 5433 the default port
         if not 'port' in dsn:
-            dsn += ' port=5433' 
+            if 'postgresql://'  in dsn or 'postgres://'  in dsn:
+                if '@' in dsn :
+                    idx1 = dsn.index('@')
+                    idx2 = dsn.find('/', idx1)
+                    idx3  = dsn.find(':', idx1)
+                    if idx3 == -1 :
+                        res = dsn[idx1 + len('@') : idx2]
+                        newres = res + ':5433'
+                        dsn = dsn.replace(res,newres)
+                else :
+                    idx1 = dsn.index('://')
+                    idx2 = dsn.find('/', idx1 + len('://'))
+                    idx3  = dsn.find(':', idx1 + len('://'))
+                    if idx3 == -1 :
+                        res = dsn[idx1 + len('://') : idx2]
+                        newres = res + ':5433'
+                        dsn = dsn.replace(res,newres)
+            else: 
+                dsn += ' port=5433' 
         parse_dsn(dsn)
         return dsn
     
-    #Set Default pot to 5433 if not specified
+    #Set Default port to 5433 if not specified
     if not 'port' in kwargs:
         kwargs['port'] = 5433
     # Override the dsn with the parameters
