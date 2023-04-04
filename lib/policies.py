@@ -26,7 +26,7 @@ class ClusterAwareLoadBalancer:
     def getInstance(refreshInterval):
         if ClusterAwareLoadBalancer.instance == None:
             ClusterAwareLoadBalancer.instance = ClusterAwareLoadBalancer()
-            ClusterAwareLoadBalancer.instance.refreshListSeconds = refreshInterval if refreshInterval > 0 else 300 
+            ClusterAwareLoadBalancer.instance.refreshListSeconds = refreshInterval if refreshInterval > 0 and refreshInterval < 600 else 300 
         return ClusterAwareLoadBalancer.instance
 
     
@@ -37,7 +37,6 @@ class ClusterAwareLoadBalancer:
         return port
     
     def getLeastLoadedServer(self,failedhosts):
-        print(self.hostToNumConnMap)
         chosenHost = ''
         minConnectionsHostList = []
         min = sys.maxsize
@@ -173,7 +172,7 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         for value in values:
             v = value.split(':')
             if len(v) > 2 or value[-1] == ':':
-               print('Invalid value part of property topology_keys:', value)
+               raise ValueError('Invalid value part of property topology_keys:', value)
             if len(v) == 1:
                 if self.PRIMARY_PLACEMENTS not in self.allowedPlacements:
                     primary = []
@@ -198,14 +197,11 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
                     self.populatePlacementSet(v[0], fallbackPlacements)
 
 
-    def populatePlacementSet(self,placements, allowedPlacements):
-        pStrings = placements.split(',')
-        for pl in pStrings:
-            placementParts = pl.split('.')
-            if len(placementParts) != 3 or placementParts[0] == '*' or placementParts[1] == '*':
-                print('Ignoring malformed topology-key property value')
-                continue
-            cp = self.getPlacementMap(placementParts[0], placementParts[1], placementParts[2])
+    def populatePlacementSet(self, placements, allowedPlacements):
+        placementParts = placements.split('.')
+        if len(placementParts) != 3 or placementParts[0] == '*' or placementParts[1] == '*':
+            raise ValueError('Ignoring malformed topology-key property value')
+        cp = self.getPlacementMap(placementParts[0], placementParts[1], placementParts[2])
 
         allowedPlacements.append(cp)
 
@@ -251,15 +247,20 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         if servers:
             return servers
         for i in range(self.FIRST_FALLBACK,self.MAX_PREFERENCE_VALUE + 1):
-            if self.fallbackPrivateIPs[i]:
-                return super().getPrivateOrPublicServers(useHostColumn, self.fallbackPrivateIPs[i], self.fallbackPublicIPs[i])
+            if self.fallbackPrivateIPs.get(i):
+                return super().getPrivateOrPublicServers(useHostColumn, self.fallbackPrivateIPs.get(i), self.fallbackPublicIPs.get(i))
 
-        return super().getPrivateOrPublicServers(useHostColumn, self.fallbackPrivateIPs[self.REST_OF_CLUSTER], self.fallbackPublicIPs[self.REST_OF_CLUSTER])
+        return super().getPrivateOrPublicServers(useHostColumn, self.fallbackPrivateIPs.get(self.REST_OF_CLUSTER), self.fallbackPublicIPs.get(self.REST_OF_CLUSTER))
 
     def checkIfPresent(self, cp, placements):
         for placement in placements:
-            if cp == placement:
-                return True
+            if placement['zone'] == '*':
+                if placement['cloud'] == cp['cloud'] and placement['region'] == cp ['region']:
+                    return True
+        else :
+            for placement in placements:
+                if cp == placement:
+                    return True
         
         return False
 
@@ -270,8 +271,6 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
             if len(public_host.strip()) != 0:
                 currentPublicIps.append(public_host)
         else:
-            print(cp)
-            print(self.allowedPlacements)
             for key,value in self.allowedPlacements.items():
                 if self.checkIfPresent(cp, value):
                     if key not in self.fallbackPrivateIPs:
