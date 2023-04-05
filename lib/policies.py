@@ -174,11 +174,7 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
             if len(v) > 2 or value[-1] == ':':
                raise ValueError('Invalid value part of property topology_keys:', value)
             if len(v) == 1:
-                if self.PRIMARY_PLACEMENTS not in self.allowedPlacements:
-                    primary = []
-                    self.allowedPlacements[self.PRIMARY_PLACEMENTS] = primary
-                else:
-                    primary = self.allowedPlacements[self.PRIMARY_PLACEMENTS]
+                primary = self.computeIfAbsent(self.allowedPlacements, self.PRIMARY_PLACEMENTS)
                 self.populatePlacementSet(v[0],primary)
                 self.allowedPlacements[self.PRIMARY_PLACEMENTS] = primary
             else:
@@ -273,38 +269,31 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         else:
             for key,value in self.allowedPlacements.items():
                 if self.checkIfPresent(cp, value):
-                    if key not in self.fallbackPrivateIPs:
-                        hosts = []
-                        self.fallbackPrivateIPs[key] = hosts
-                    else:
-                        hosts = self.fallbackPrivateIPs[key]
+                    hosts = self.computeIfAbsent(self.fallbackPrivateIPs, key)
                     hosts.append(host)
                     self.fallbackPrivateIPs[key] = hosts
                     if len(public_host.strip()) != 0:
-                        if key not in self.fallbackPublicIPs:
-                            publicIPs = []
-                            self.fallbackPublicIPs[key] = publicIPs
-                        else:
-                            publicIPs = self.fallbackPublicIPs[key]
+                        publicIPs = self.computeIfAbsent(self.fallbackPublicIPs, key)
                         publicIPs.append(public_host)
                         self.fallbackPublicIPs[key] = publicIPs
                     return
-
-                if self.REST_OF_CLUSTER not in self.fallbackPrivateIPs:
-                    remaininghosts = []
-                    self.fallbackPrivateIPs[self.REST_OF_CLUSTER] = remaininghosts
-                else:
-                    remaininghosts = self.fallbackPrivateIPs[self.REST_OF_CLUSTER]
+                
+                remaininghosts = self.computeIfAbsent(self.fallbackPrivateIPs, self.REST_OF_CLUSTER)
                 remaininghosts.append(host)
                 self.fallbackPrivateIPs[self.REST_OF_CLUSTER] = remaininghosts
+
                 if len(public_host.strip()) != 0:
-                    if self.REST_OF_CLUSTER not in self.fallbackPublicIPs:
-                        remainingpublicIPs = []
-                        self.fallbackPublicIPs[self.REST_OF_CLUSTER] = remainingpublicIPs
-                    else:
-                        remainingpublicIPs = self.fallbackPublicIPs[self.REST_OF_CLUSTER]
+                    remainingpublicIPs = self.computeIfAbsent(self.fallbackPublicIPs, self.REST_OF_CLUSTER)
                     remainingpublicIPs.append(public_host)
                     self.fallbackPublicIPs[self.REST_OF_CLUSTER] = remainingpublicIPs
+
+    def computeIfAbsent(self, cloudplacement, index):
+        if index not in cloudplacement:
+            temp_set = []
+            cloudplacement[index] = temp_set
+        else:
+            temp_set = cloudplacement[index]
+        return temp_set
 
 
 
