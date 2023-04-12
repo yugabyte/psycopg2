@@ -18,9 +18,12 @@ class ClusterAwareLoadBalancer:
     hostPortMap = {}
     hostPortMap_public = {}
     unreachableHosts = []
+    currentPublicIps = []
     GET_SERVERS_QUERY = "select * from yb_servers()"
     DEFAULT_REFRESH_INTERVAL = 300
     refreshListSeconds = DEFAULT_REFRESH_INTERVAL
+    useHostColumn = None
+    
 
 
     def getInstance(refreshInterval):
@@ -37,6 +40,15 @@ class ClusterAwareLoadBalancer:
         return port
     
     def getLeastLoadedServer(self,failedhosts):
+        if not self.hostToNumConnMap and not self.currentPublicIps:
+            privatehosts = []
+            self.servers = self.getPrivateOrPublicServers(self.useHostColumn, privatehosts, self.currentPublicIps)
+            if self.servers != None and self.servers.count != 0 :
+                for h in self.servers:
+                    if not h in self.hostToNumConnMap.keys():
+                        self.hostToNumConnMap[h] = 0
+            else:
+                return '' 
         chosenHost = ''
         minConnectionsHostList = []
         min = sys.maxsize
@@ -71,9 +83,7 @@ class ClusterAwareLoadBalancer:
         cur.execute(self.GET_SERVERS_QUERY)
         rs = cur.fetchall()
         currentPrivateIps = []
-        currentPublicIps = []
         hostConnectedTo = conn.info.host_addr
-        useHostColumn = None
         isIpv6Addresses = ':' in hostConnectedTo
         if isIpv6Addresses:
             hostConnectedTo = hostConnectedTo.replace('[','').replace(']','')
@@ -85,14 +95,14 @@ class ClusterAwareLoadBalancer:
             self.hostPortMap[host] = port
             self.hostPortMap_public[public_host] = port
             currentPrivateIps.append(host)
-            currentPublicIps.append(public_host)
-            if useHostColumn == None :
+            self.currentPublicIps.append(public_host)
+            if self.useHostColumn == None :
                 if hostConnectedTo == host :
-                    useHostColumn = True
+                    self.useHostColumn = True
                 elif hostConnectedTo == public_host :
-                    useHostColumn = False
+                    self.useHostColumn = False
         
-        return self.getPrivateOrPublicServers(useHostColumn, currentPrivateIps, currentPublicIps)
+        return self.getPrivateOrPublicServers(self.useHostColumn, currentPrivateIps, self.currentPublicIps)
         
     def getPrivateOrPublicServers(self, useHostColumn, privateHosts, publicHosts):
         if useHostColumn == None :
@@ -161,6 +171,7 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         self.hostToNumConnMap = {}
         self.hostPortMap = {}
         self.hostPortMap_public = {}
+        self.currentPublicIps = {}
         self.placements = placementvalues
         self.allowedPlacements = {}
         self.fallbackPrivateIPs = {}
@@ -214,9 +225,7 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         cur.execute(self.GET_SERVERS_QUERY)
         rs = cur.fetchall()
         currentPrivateIps = []
-        currentPublicIps = []
         hostConnectedTo = conn.info.host_addr
-        useHostColumn = None
         isIpv6Addresses = ':' in hostConnectedTo
         if isIpv6Addresses:
             hostConnectedTo = hostConnectedTo.replace('[','').replace(']','')
@@ -230,13 +239,13 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
             port = row[1]
             self.hostPortMap[host] = port
             self.hostPortMap_public[public_host] = port
-            self.updateCurrentHostList(currentPrivateIps, currentPublicIps, host, public_host, cloud, region, zone)
-            if useHostColumn == None :
+            self.updateCurrentHostList(currentPrivateIps, self.currentPublicIps, host, public_host, cloud, region, zone)
+            if self.useHostColumn == None :
                 if hostConnectedTo == host :
-                    useHostColumn = True
+                    self.useHostColumn = True
                 elif hostConnectedTo == public_host :
-                    useHostColumn = False
-        return self.getPrivateOrPublicServers(useHostColumn, currentPrivateIps, currentPublicIps)
+                    self.useHostColumn = False
+        return self.getPrivateOrPublicServers(self.useHostColumn, currentPrivateIps, self.currentPublicIps)
 
     def getPrivateOrPublicServers(self, useHostColumn, privateHosts, publicHosts):
         servers = super().getPrivateOrPublicServers(useHostColumn, privateHosts, publicHosts)
