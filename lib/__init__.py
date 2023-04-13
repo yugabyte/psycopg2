@@ -185,7 +185,7 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
             else:
                 return newconn
         except OperationalError:
-            print('Couldnt connect to ', chosenHost, ' adding to failed list')
+            print('Couldn\'t connect to ', chosenHost, ' adding to failed list')
             failedHosts.append(chosenHost)
             loadbalancer.updateFailedHosts(chosenHost)
             try :

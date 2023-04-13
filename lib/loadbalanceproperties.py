@@ -5,6 +5,7 @@ class LoadBalanceProperties:
     CONNECTION_MANAGER_MAP = {}
     placements = ''
     SIMPLE_LB = 'simple'
+    refreshInterval = -1
 
     def __init__(self, dsn, **kwargs):
         self.SIMPLE_LB = 'simple'
