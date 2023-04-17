@@ -16,7 +16,7 @@ def createClusterWithSixNodes():
     global yb_path
     yb_path = os.getenv('YB_PATH')
     os.system(yb_path+'/bin/yb-ctl destroy')
-    os.system(yb_path+'/bin/yb-ctl create --rf 3 --placement_info \"aws.us-west.us-west-1a\" --tserver_flags \"placement_uuid=live,max_stale_read_bound_time_ms=60000000\"')
+    os.system(yb_path+'/bin/yb-ctl create --rf 3 --placement_info \"aws.us-west.us-west-1a\"')
     os.system(yb_path + '/bin/yb-ctl add_node --placement_info \"aws.us-west.us-east-2a\"')
     os.system(yb_path + '/bin/yb-ctl add_node --placement_info \"aws.us-west.us-east-2b\"')
     os.system(yb_path + '/bin/yb-ctl add_node --placement_info \"aws.us-west.us-east-2c\"')
@@ -88,6 +88,7 @@ def checkNodeDownBehaviour():
     os.system(yb_path+"/bin/yb-ctl stop_node 3")
 
     createConnections(url,"aws.us-west.us-west-1a", [-1, -1, -1, 4, 4, 4])
+    createConnections(url, "aws.us-west.*:1,aws.us-west.us-east-2a:2,aws.us-west.us-east-2b:2,aws.us-west.us-east-2c:3", [-1.-1,-1,6,6,0])
 
 if __name__ == "__main__":
     main()

@@ -45,8 +45,7 @@ class ClusterAwareLoadBalancer:
             self.servers = self.getPrivateOrPublicServers(self.useHostColumn, privatehosts, self.currentPublicIps)
             if self.servers != None and self.servers.count != 0 :
                 for h in self.servers:
-                    if not h in self.hostToNumConnMap.keys():
-                        self.hostToNumConnMap[h] = 0
+                    self.hostToNumConnMap[h] = 0
             else:
                 return '' 
         chosenHost = ''

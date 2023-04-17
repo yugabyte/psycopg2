@@ -90,7 +90,6 @@ class LoadBalanceProperties:
         if self.placements == '':
             ld = LoadBalanceProperties.CONNECTION_MANAGER_MAP.get(self.SIMPLE_LB)
             if ld == None:
-                # print("Refresh Interval", self.EQUALS)
                 ld = ClusterAwareLoadBalancer.getInstance(self.refreshInterval)
                 LoadBalanceProperties.CONNECTION_MANAGER_MAP[self.SIMPLE_LB] = ld
         else:
