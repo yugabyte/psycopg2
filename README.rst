@@ -96,6 +96,7 @@ The following connection properties need to be added to enable load balancing:
 
 * load_balance - enable cluster-aware load balancing by setting this property to True; disabled by default.
 * topology_keys - provide comma-separated geo-location values to enable topology-aware load balancing. Geo-locations can be provided as cloud.region.zone.
+* yb-servers-refresh-interval - The list of servers, to balance the connection load on, are refreshed periodically every 5 minutes by default. This time can be regulated by this property.
 
 Pass new connection properties for load balancing in the connection URL or in the dictionary. To enable uniform load balancing across all servers, you set the load-balance property to True in the URL, as per the following example.
 
@@ -116,3 +117,11 @@ Connection String::
 Connection Dictionary::
 
     conn = psycopg2.connect(user = 'username', password='xxx', host = 'hostname', port = 'port', dbname = 'database_name', load_balance='True', topology_keys='cloud1.region1.zone1,cloud2.region2.zone2')
+
+Multiple topologies can also be passed to the Topology Keys property, and each of them can also be given a preference value, as per the following example.::
+
+    conn = psycopg2.connect("host=127.0.0.1 port=5433 user=yugabyte dbname=yugabyte load_balance=True topology_keys=cloud1.region1.zone1:1,cloud2.region2.zone2:2")
+
+The preference value (appended after :) is optional. So it is compatible with previous syntax of specifying cloud placements.
+
+Preference value :1 means primary placement zone(s), value :2 means first fallback, value :3 means second fallback and so on.

@@ -5,6 +5,7 @@ class LoadBalanceProperties:
     CONNECTION_MANAGER_MAP = {}
     placements = ''
     SIMPLE_LB = 'simple'
+    refreshInterval = -1
 
     def __init__(self, dsn, **kwargs):
         self.SIMPLE_LB = 'simple'
@@ -14,6 +15,7 @@ class LoadBalanceProperties:
         self.originalProperties = kwargs
         self.loadbalance = False
         self.placements = ''
+        self.refreshInterval = -1
         self.ybProperties = self.originalProperties
         self.ybDSN = None
         if self.originalDSN != None :
@@ -44,6 +46,15 @@ class LoadBalanceProperties:
                 tp_parts = list(filter(('').__ne__, tp_parts))
                 self.placements = tp_parts[1].strip()
                 sb = TopologyAwareRegex.sub('',sb)
+
+            RefreshIntervalRegex = re.compile(r'yb-servers-refresh-interval( )*=( )*[0-9]*( )?')
+            ri_string = RefreshIntervalRegex.search(self.originalDSN)
+            if ri_string != None:
+                ri_string = ri_string.group()
+                ri_parts = ri_string.split(self.EQUALS)
+                ri_parts = list(filter(('').__ne__, ri_parts))
+                self.refreshInterval = int(ri_parts[1].strip())
+                sb = RefreshIntervalRegex.sub('', sb)
         return sb
         
     def processProperties(self):
@@ -55,6 +66,8 @@ class LoadBalanceProperties:
                 self.loadbalance = True
             if 'topology_keys' in backup_dict:
                 self.placements = backup_dict.pop('topology_keys')
+            if 'yb-servers-refresh-interval' in backup_dict:
+                self.refreshInterval = int(backup_dict.pop('yb-servers-refresh-interval'))
         return backup_dict
 
 
@@ -77,7 +90,7 @@ class LoadBalanceProperties:
         if self.placements == '':
             ld = LoadBalanceProperties.CONNECTION_MANAGER_MAP.get(self.SIMPLE_LB)
             if ld == None:
-                ld = ClusterAwareLoadBalancer.getInstance()
+                ld = ClusterAwareLoadBalancer.getInstance(self.refreshInterval)
                 LoadBalanceProperties.CONNECTION_MANAGER_MAP[self.SIMPLE_LB] = ld
         else:
             ld = LoadBalanceProperties.CONNECTION_MANAGER_MAP.get(self.placements)

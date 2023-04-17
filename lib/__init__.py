@@ -155,11 +155,15 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
             controlConnection.cursor_factory = cursor_factory
         if not loadbalancer.refresh(controlConnection):
             return None
-        if needsRefresh:
+        if chosenHost != '':
             dsnhost = controlConnection.info.host_addr
             loadbalancer.updateConnectionMap(dsnhost, 1)
             loadbalancer.updateConnectionMap(chosenHost, -1)
-        controlConnection.close()
+        
+        try:
+            controlConnection.close()
+        except Exception as e:
+            print("Could not close control connection:", str(e))
 
         # Getting chosenHost again after refresh for the latest least loaded server
         
@@ -181,7 +185,7 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
             else:
                 return newconn
         except OperationalError:
-            print('Couldnt connect to ', chosenHost, ' adding to failed list')
+            print('Couldn\'t connect to ', chosenHost, ' adding to failed list')
             failedHosts.append(chosenHost)
             loadbalancer.updateFailedHosts(chosenHost)
             try :
