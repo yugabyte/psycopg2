@@ -15,17 +15,17 @@ class ClusterAwareLoadBalancer:
     lastServerListFetchTime = 0
     servers = []
     hostToNumConnMap = {}
+    hostToNumConnCount = {}
     hostPortMap = {}
     hostPortMap_public = {}
+    hostToPriorityMap = {}
     unreachableHosts = []
     currentPublicIps = []
     GET_SERVERS_QUERY = "select * from yb_servers()"
     DEFAULT_REFRESH_INTERVAL = 300
     refreshListSeconds = DEFAULT_REFRESH_INTERVAL
     useHostColumn = None
-    
-
-
+    has_better_node = False
     def getInstance(refreshInterval):
         if ClusterAwareLoadBalancer.instance == None:
             ClusterAwareLoadBalancer.instance = ClusterAwareLoadBalancer()
@@ -45,7 +45,11 @@ class ClusterAwareLoadBalancer:
             self.servers = self.getPrivateOrPublicServers(self.useHostColumn, privatehosts, self.currentPublicIps)
             if self.servers != None and self.servers.count != 0 :
                 for h in self.servers:
-                    self.hostToNumConnMap[h] = 0
+                    if not h in self.hostToNumConnMap.keys():
+                        if h in self.hostToNumConnCount.keys():
+                            self.hostToNumConnMap[h] = self.hostToNumConnCount[h]
+                        else:
+                            self.hostToNumConnMap[h] = 0
             else:
                 return '' 
         chosenHost = ''
@@ -68,6 +72,21 @@ class ClusterAwareLoadBalancer:
         
         if chosenHost != '':
             self.updateConnectionMap(chosenHost,1)
+        elif self.useHostColumn == None:
+            newList = []
+            newList = newList + self.currentPublicIps
+            if not newList:
+                self.useHostColumn = False
+                self.servers = newList
+                self.unreachableHosts.clear()
+                for h in self.servers:
+                    if not h in self.hostToNumConnMap.keys():
+                        if h in self.hostToNumConnCount.keys():
+                            self.hostToNumConnMap[h] = self.hostToNumConnCount[h]
+                        else:
+                            self.hostToNumConnMap[h] = 0
+
+                return self.getLeastLoadedServer(failedhosts)
             
         return chosenHost
     
@@ -86,15 +105,22 @@ class ClusterAwareLoadBalancer:
         isIpv6Addresses = ':' in hostConnectedTo
         if isIpv6Addresses:
             hostConnectedTo = hostConnectedTo.replace('[','').replace(']','')
-        
+
+        self.hostToPriorityMap.clear()
+
         for row in rs :
             host = row[0]
             public_host = row[7]
+            cloud = row[4]
+            region = row[5]
+            zone = row[6]
             port = row[1]
             self.hostPortMap[host] = port
+            self.updatePriorityMap(host,cloud,region,zone)
             self.hostPortMap_public[public_host] = port
-            currentPrivateIps.append(host)
-            self.currentPublicIps.append(public_host)
+            if not host in self.unreachableHosts:
+                currentPrivateIps.append(host)
+                self.currentPublicIps.append(public_host)
             if self.useHostColumn == None :
                 if hostConnectedTo == host :
                     self.useHostColumn = True
@@ -139,6 +165,11 @@ class ClusterAwareLoadBalancer:
             self.hostToNumConnMap[host] = incDec
         elif currentCount != None:
             self.hostToNumConnMap[host] = currentCount + incDec
+
+    def updatePriorityMap(self, host, cloud, region, zone):
+        return
+    def has_more_preferred_nodes(self, chosenHost):
+        return False
 
     def getUnreachableHosts(self):
         return self.unreachableHosts
