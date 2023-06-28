@@ -18,7 +18,8 @@ def create_cluster():
 
 def create_cluster_with_six_nodes():
     global yb_path
-    yb_path = os.getenv('YB_PATH')
+    # yb_path = os.getenv('YB_PATH')
+    yb_path = '/Users/ssarah/code/yugabyte-2.18.0.0'
     os.system(yb_path+'/bin/yb-ctl destroy')
     os.system(yb_path+'/bin/yb-ctl create --rf 3 --placement_info \"aws.us-west.us-west-1a\"')
     os.system(yb_path + '/bin/yb-ctl add_node --placement_info \"aws.us-east.us-east-2a\"')
@@ -50,14 +51,16 @@ def create_connections(url, tkValue, counts):
 def verifyOn(server, expectedCount):
     count = 0
     url = "http://" + server + ":13000/rpcz"
-    response = urlopen(url)
-    data_json = json.loads(response.read())
-    for connection in data_json["connections"]:
-        if connection["backend_type"] == "client backend":
-            count = count + 1
-    print(f"{server}:{count}")
-    assert count == expectedCount
-
+    try:
+        response = urlopen(url)
+        data_json = json.loads(response.read())
+        for connection in data_json["connections"]:
+            if connection["backend_type"] == "client backend":
+                count = count + 1
+        print(f"{server}:{count}")
+        assert count == expectedCount
+    except ConnectionRefusedError:
+        print(f'{server} unavailable')
 def main():
 
     create_cluster()
@@ -102,7 +105,7 @@ def check_node_up_behaviour():
     # 127.0.0.5 -> us-east-2b
     # 127.0.0.6 -> us-east-2c
     create_cluster_with_six_nodes()
-    url = "host=127.0.0.4,127.0.0.5 port=5433 user=yugabyte dbname=yugabyte load_balance=True topology_keys="
+    url = "host=127.0.0.4,127.0.0.5 port=5433 user=yugabyte dbname=yugabyte yb_servers_refresh_interval=10 load_balance=True topology_keys="
     create_connections(url, "aws.us-west.us-west-1a:1,aws.us-east.us-east-2a:2,aws.us-east.us-east-2b:3,aws.us-east.us-east-2c:4",[4, 4, 4, 0, 0, 0])
 
     os.system(yb_path + "/bin/yb-ctl stop_node 1")
@@ -114,13 +117,15 @@ def check_node_up_behaviour():
 
     os.system(yb_path + "/bin/yb-ctl start_node 4 --placement_info \"aws.us-east.us-east-2a\"")
 
-    _lb.has_better_node = True
+    time.sleep(15)
+
     create_connections(url, "aws.us-west.us-west-1a:1,aws.us-east.us-east-2a:2,aws.us-east.us-east-2b:3,aws.us-east.us-east-2c:4",[-1, -1, -1, 12, 0, 0])
 
     os.system((yb_path + "/bin/yb-ctl start_node 1 --placement_info \"aws.us-west.us-west-1a\""))
     os.system((yb_path + "/bin/yb-ctl start_node 2 --placement_info \"aws.us-west.us-west-1a\""))
 
-    _lb.has_better_node = True
+    time.sleep(15)
+
     create_connections(url, "aws.us-west.us-west-1a:1,aws.us-east.us-east-2a:2,aws.us-east.us-east-2b:3,aws.us-east.us-east-2c:4",[6, 6, -1, 0, 0, 0])
 
 
@@ -128,3 +133,4 @@ def check_node_up_behaviour():
 if __name__ == "__main__":
     main()
     check_node_down_behaviour()
+    check_node_up_behaviour()

@@ -11,6 +11,7 @@ class ClusterAwareLoadBalancer:
 
     instance = None
     GET_SERVERS_QUERY = "select * from yb_servers()"
+    DEFAULT_FAILED_HOST_TTL_SECONDS = 5
     REFRESH_LIST_SECONDS = 300
     lastServerListFetchTime = 0
     servers = []
@@ -19,7 +20,7 @@ class ClusterAwareLoadBalancer:
     hostPortMap = {}
     hostPortMap_public = {}
     hostToPriorityMap = {}
-    unreachableHosts = []
+    unreachableHosts = {}
     currentPublicIps = []
     GET_SERVERS_QUERY = "select * from yb_servers()"
     DEFAULT_REFRESH_INTERVAL = 300
@@ -118,7 +119,7 @@ class ClusterAwareLoadBalancer:
             self.hostPortMap[host] = port
             self.updatePriorityMap(host,cloud,region,zone)
             self.hostPortMap_public[public_host] = port
-            if not host in self.unreachableHosts:
+            if not host in self.unreachableHosts.keys():
                 currentPrivateIps.append(host)
                 self.currentPublicIps.append(public_host)
             if self.useHostColumn == None :
@@ -144,14 +145,31 @@ class ClusterAwareLoadBalancer:
         if not self.needsRefresh():
             return True
         currTime = time.time()
+        self.lastServerListFetchTime = currTime
+        possiblyReachableHosts = []
+        for host, time_inactive in self.unreachableHosts.items():
+            if (currTime - time_inactive) > self.DEFAULT_FAILED_HOST_TTL_SECONDS:
+                possiblyReachableHosts.append(host)
+
+        emptyHostToNumConnMap = False
+        for h in possiblyReachableHosts:
+            self.unreachableHosts.pop(h, None)
+            emptyHostToNumConnMap = True
+
+        if emptyHostToNumConnMap and self.hostToNumConnMap:
+            for h in self.hostToNumConnMap:
+                self.hostToNumConnCount[h] = self.hostToNumConnMap[h]
+            self.hostToNumConnMap.clear()
         self.servers = self.getCurrentServers(conn)
         if not self.servers:
             return False
-        self.lastServerListFetchTime = currTime
-        self.unreachableHosts.clear()
+
         for h in self.servers :
-            if not h in self.hostToNumConnMap.keys():
-                self.hostToNumConnMap[h] = 0
+            if not h in self.hostToNumConnMap.keys() and not h in self.unreachableHosts.keys():
+                if h in self.hostToNumConnCount:
+                    self.hostToNumConnMap[h] = self.hostToNumConnCount[h]
+                else:
+                    self.hostToNumConnMap[h] = 0
         return True
 
     def getServers(self):
@@ -168,15 +186,19 @@ class ClusterAwareLoadBalancer:
 
     def updatePriorityMap(self, host, cloud, region, zone):
         return
-    def has_more_preferred_nodes(self, chosenHost):
+    def hasMorePreferredNodes(self, chosenHost):
         return False
 
+    def decrementHostToNumConnCount(self, chosenHost):
+        return
     def getUnreachableHosts(self):
-        return self.unreachableHosts
+        return list(self.unreachableHosts.keys())
     
     def updateFailedHosts(self, chosenHost):
-        self.unreachableHosts.append(chosenHost)
-        self.hostToNumConnMap.pop(chosenHost)
+        if not chosenHost in self.unreachableHosts:
+            self.unreachableHosts[chosenHost] = time.time()
+        self.hostToNumConnMap.pop(chosenHost, None)
+        self.hostToNumConnCount.pop(chosenHost, None)
 
     def loadBalancingNodes(self):
         return 'all'
@@ -259,7 +281,7 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         isIpv6Addresses = ':' in hostConnectedTo
         if isIpv6Addresses:
             hostConnectedTo = hostConnectedTo.replace('[','').replace(']','')
-        
+        self.hostToPriorityMap.clear()
         for row in rs :
             host = row[0]
             public_host = row[7]
@@ -268,14 +290,76 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
             zone = row[6]
             port = row[1]
             self.hostPortMap[host] = port
+            self.updatePriorityMap(host, cloud, region, zone)
             self.hostPortMap_public[public_host] = port
-            self.updateCurrentHostList(currentPrivateIps, self.currentPublicIps, host, public_host, cloud, region, zone)
+            if not host in self.unreachableHosts:
+                self.updateCurrentHostList(currentPrivateIps, self.currentPublicIps, host, public_host, cloud, region, zone)
             if self.useHostColumn == None :
                 if hostConnectedTo == host :
                     self.useHostColumn = True
                 elif hostConnectedTo == public_host :
                     self.useHostColumn = False
         return self.getPrivateOrPublicServers(self.useHostColumn, currentPrivateIps, self.currentPublicIps)
+
+    def hasMorePreferredNodes(self, chosenHost):
+        if chosenHost in self.hostToPriorityMap:
+            chosenHostPriority = self.hostToPriorityMap.get(chosenHost)
+            if chosenHostPriority != None :
+                for i in range(1,chosenHostPriority):
+                    if i in self.hostToPriorityMap.values():
+                        return True
+
+        return False
+
+    def updatePriorityMap(self, host, cloud, region, zone):
+        if not host in self.unreachableHosts:
+            priority = self.getPriority(cloud, region, zone)
+            self.hostToPriorityMap[host] = priority
+
+    def getPriority(self, cloud, region,zone):
+        cp = self.getPlacementMap(cloud,region, zone)
+        return self.getKeysByValue(cp)
+
+    def getKeysByValue(self, cp):
+        for i in range(1, self.MAX_PREFERENCE_VALUE + 1):
+            if self.allowedPlacements.get(i):
+                if self.checkIfPresent(cp, self.allowedPlacements.get(i)):
+                    return i
+
+        return self.MAX_PREFERENCE_VALUE + 1
+
+    def updateFailedHosts(self, chosenHost):
+        super().updateFailedHosts(chosenHost)
+        for i in range(self.FIRST_FALLBACK, self.MAX_PREFERENCE_VALUE + 1):
+            if self.fallbackPrivateIPs.get(i):
+                if chosenHost in self.fallbackPrivateIPs.get(i):
+                    hosts = self.computeIfAbsent(self.fallbackPrivateIPs, i)
+                    hosts.remove(chosenHost)
+                    self.fallbackPrivateIPs[i] = hosts
+                    return
+            if self.fallbackPublicIPs.get(i):
+                if chosenHost in self.fallbackPublicIPs.get(i):
+                    hosts = self.computeIfAbsent(self.fallbackPublicIPs, i)
+                    hosts.remove(chosenHost)
+                    self.fallbackPublicIPs[i] = hosts
+                    return
+            if self.fallbackPrivateIPs.get(self.REST_OF_CLUSTER):
+                if chosenHost in self.fallbackPrivateIPs.get(self.REST_OF_CLUSTER):
+                    hosts = self.computeIfAbsent(self.fallbackPrivateIPs, self.REST_OF_CLUSTER)
+                    hosts.remove(chosenHost)
+                    self.fallbackPrivateIPs[self.REST_OF_CLUSTER] = hosts
+                    return
+            if self.fallbackPublicIPs.get(self.REST_OF_CLUSTER):
+                if chosenHost in self.fallbackPublicIPs.get(self.REST_OF_CLUSTER):
+                    hosts = self.computeIfAbsent(self.fallbackPublicIPs, self.REST_OF_CLUSTER)
+                    hosts.remove(chosenHost)
+                    self.fallbackPublicIPs[self.REST_OF_CLUSTER] = hosts
+                    return
+
+    def decrementHostToNumConnCount(self, chosenHost):
+        currentCount = self.hostToNumConnCount.get(chosenHost)
+        if currentCount != None and currentCount != 0 :
+            self.hostToNumConnCount[chosenHost] = currentCount - 1
 
     def getPrivateOrPublicServers(self, useHostColumn, privateHosts, publicHosts):
         servers = super().getPrivateOrPublicServers(useHostColumn, privateHosts, publicHosts)

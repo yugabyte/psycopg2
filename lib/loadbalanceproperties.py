@@ -47,7 +47,7 @@ class LoadBalanceProperties:
                 self.placements = tp_parts[1].strip()
                 sb = TopologyAwareRegex.sub('',sb)
 
-            RefreshIntervalRegex = re.compile(r'yb-servers-refresh-interval( )*=( )*[0-9]*( )?')
+            RefreshIntervalRegex = re.compile(r'yb_servers_refresh_interval( )*=( )*[0-9]*( )?')
             ri_string = RefreshIntervalRegex.search(self.originalDSN)
             if ri_string != None:
                 ri_string = ri_string.group()
@@ -66,8 +66,8 @@ class LoadBalanceProperties:
                 self.loadbalance = True
             if 'topology_keys' in backup_dict:
                 self.placements = backup_dict.pop('topology_keys')
-            if 'yb-servers-refresh-interval' in backup_dict:
-                self.refreshInterval = int(backup_dict.pop('yb-servers-refresh-interval'))
+            if 'yb_servers_refresh_interval' in backup_dict:
+                self.refreshInterval = int(backup_dict.pop('yb_servers_refresh_interval'))
         return backup_dict
 
 
