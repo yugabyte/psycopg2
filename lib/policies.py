@@ -12,7 +12,7 @@ class ClusterAwareLoadBalancer:
     instance = None
     GET_SERVERS_QUERY = "select * from yb_servers()"
     DEFAULT_FAILED_HOST_TTL_SECONDS = 5
-    REFRESH_LIST_SECONDS = 300
+    failedHostsTTL = DEFAULT_FAILED_HOST_TTL_SECONDS
     lastServerListFetchTime = 0
     servers = []
     hostToNumConnMap = {}
@@ -26,11 +26,11 @@ class ClusterAwareLoadBalancer:
     DEFAULT_REFRESH_INTERVAL = 300
     refreshListSeconds = DEFAULT_REFRESH_INTERVAL
     useHostColumn = None
-    has_better_node = False
-    def getInstance(refreshInterval):
+    def getInstance(refreshInterval, failedHostTTL):
         if ClusterAwareLoadBalancer.instance == None:
             ClusterAwareLoadBalancer.instance = ClusterAwareLoadBalancer()
-            ClusterAwareLoadBalancer.instance.refreshListSeconds = refreshInterval if refreshInterval > 0 and refreshInterval < 600 else 300 
+            ClusterAwareLoadBalancer.instance.refreshListSeconds = refreshInterval if refreshInterval > 0 and refreshInterval < 600 else 300
+            ClusterAwareLoadBalancer.instance.failedHostsTTL = failedHostTTL if failedHostTTL > 0 else ClusterAwareLoadBalancer.instance.DEFAULT_FAILED_HOST_TTL_SECONDS
         return ClusterAwareLoadBalancer.instance
 
     
@@ -76,7 +76,7 @@ class ClusterAwareLoadBalancer:
         elif self.useHostColumn == None:
             newList = []
             newList = newList + self.currentPublicIps
-            if not newList:
+            if newList:
                 self.useHostColumn = False
                 self.servers = newList
                 self.unreachableHosts.clear()
@@ -95,7 +95,7 @@ class ClusterAwareLoadBalancer:
         currentTimeInSeconds = time.time()
         diff = currentTimeInSeconds - self.lastServerListFetchTime
         firstTime = not self.servers
-        return (firstTime or diff > self.REFRESH_LIST_SECONDS)
+        return (firstTime or diff > self.refreshListSeconds)
 
     def getCurrentServers(self, conn):
         cur = conn.cursor()
@@ -148,7 +148,7 @@ class ClusterAwareLoadBalancer:
         self.lastServerListFetchTime = currTime
         possiblyReachableHosts = []
         for host, time_inactive in self.unreachableHosts.items():
-            if (currTime - time_inactive) > self.DEFAULT_FAILED_HOST_TTL_SECONDS:
+            if (currTime - time_inactive) > self.failedHostsTTL:
                 possiblyReachableHosts.append(host)
 
         emptyHostToNumConnMap = False
@@ -219,7 +219,7 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
     REST_OF_CLUSTER = -1
     MAX_PREFERENCE_VALUE = 10
 
-    def __init__(self, placementvalues):
+    def __init__(self, placementvalues, refreshInterval, failedHostTTL):
         self.hostToNumConnMap = {}
         self.hostPortMap = {}
         self.hostPortMap_public = {}
@@ -228,6 +228,8 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         self.allowedPlacements = {}
         self.fallbackPrivateIPs = {}
         self.fallbackPublicIPs = {}
+        self.refreshListSeconds = refreshInterval
+        self.failedHostsTTL = failedHostTTL
         self.parseGeoLocations()
 
     def parseGeoLocations(self):

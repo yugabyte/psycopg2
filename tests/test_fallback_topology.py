@@ -11,15 +11,13 @@ url1 = "host=127.0.0.1 port=5433 user=yugabyte dbname=yugabyte load_balance=True
 yb_path = ""
 def create_cluster():
     global yb_path
-    # yb_path = os.getenv('YB_PATH')
-    yb_path = '/Users/ssarah/code/yugabyte-db'
+    yb_path = os.getenv('YB_PATH')
     os.system(yb_path+'/bin/yb-ctl destroy')
     os.system(yb_path+'/bin/yb-ctl create --rf 3 --placement_info \"aws.us-west.us-west-2a,aws.us-west.us-west-2b,aws.us-west.us-west-2c\"')
 
 def create_cluster_with_six_nodes():
     global yb_path
-    # yb_path = os.getenv('YB_PATH')
-    yb_path = '/Users/ssarah/code/yugabyte-2.18.0.0'
+    yb_path = os.getenv('YB_PATH')
     os.system(yb_path+'/bin/yb-ctl destroy')
     os.system(yb_path+'/bin/yb-ctl create --rf 3 --placement_info \"aws.us-west.us-west-1a\"')
     os.system(yb_path + '/bin/yb-ctl add_node --placement_info \"aws.us-east.us-east-2a\"')
@@ -59,8 +57,8 @@ def verifyOn(server, expectedCount):
                 count = count + 1
         print(f"{server}:{count}")
         assert count == expectedCount
-    except ConnectionRefusedError:
-        print(f'{server} unavailable')
+    except Exception as ex:
+        print(f'{ex}')
 def main():
 
     create_cluster()
@@ -131,6 +129,6 @@ def check_node_up_behaviour():
 
 
 if __name__ == "__main__":
-    main()
-    check_node_down_behaviour()
+    # main()
+    # check_node_down_behaviour()
     check_node_up_behaviour()

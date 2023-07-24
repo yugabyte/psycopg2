@@ -6,6 +6,7 @@ class LoadBalanceProperties:
     placements = ''
     SIMPLE_LB = 'simple'
     refreshInterval = -1
+    failed_host_ttl_seconds = -1
 
     def __init__(self, dsn, **kwargs):
         self.SIMPLE_LB = 'simple'
@@ -55,6 +56,15 @@ class LoadBalanceProperties:
                 ri_parts = list(filter(('').__ne__, ri_parts))
                 self.refreshInterval = int(ri_parts[1].strip())
                 sb = RefreshIntervalRegex.sub('', sb)
+
+            FailedHostTTLRegex = re.compile(r'failed_host_ttl_seconds( )*=( )*[0-9]*( )?')
+            ri_string = FailedHostTTLRegex.search(self.originalDSN)
+            if ri_string != None:
+                ri_string = ri_string.group()
+                ri_parts = ri_string.split(self.EQUALS)
+                ri_parts = list(filter(('').__ne__, ri_parts))
+                self.failed_host_ttl_seconds = int(ri_parts[1].strip())
+                sb = FailedHostTTLRegex.sub('', sb)
         return sb
         
     def processProperties(self):
@@ -68,6 +78,8 @@ class LoadBalanceProperties:
                 self.placements = backup_dict.pop('topology_keys')
             if 'yb_servers_refresh_interval' in backup_dict:
                 self.refreshInterval = int(backup_dict.pop('yb_servers_refresh_interval'))
+            if 'failed_host_ttl_seconds' in backup_dict:
+                self.refreshInterval = int(backup_dict.pop('failed_host_ttl_seconds'))
         return backup_dict
 
 
@@ -90,11 +102,11 @@ class LoadBalanceProperties:
         if self.placements == '':
             ld = LoadBalanceProperties.CONNECTION_MANAGER_MAP.get(self.SIMPLE_LB)
             if ld == None:
-                ld = ClusterAwareLoadBalancer.getInstance(self.refreshInterval)
+                ld = ClusterAwareLoadBalancer.getInstance(self.refreshInterval, self.failed_host_ttl_seconds)
                 LoadBalanceProperties.CONNECTION_MANAGER_MAP[self.SIMPLE_LB] = ld
         else:
             ld = LoadBalanceProperties.CONNECTION_MANAGER_MAP.get(self.placements)
             if ld == None :
-                ld = TopologyAwareLoadBalancer(self.placements)
+                ld = TopologyAwareLoadBalancer(self.placements, self.refreshInterval, self.failed_host_ttl_seconds)
                 LoadBalanceProperties.CONNECTION_MANAGER_MAP[self.placements] = ld
         return ld
