@@ -180,9 +180,16 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
                 newconn.cursor_factory = cursor_factory
             if not loadbalancer.refresh(newconn):
                 loadbalancer.updateConnectionMap(chosenHost, -1)
-                failedHosts.add(chosenHost)
+                failedHosts.append(chosenHost)
                 loadbalancer.setForRefresh()
             else:
+                better_node_available = loadbalancer.hasMorePreferredNodes(chosenHost)
+                if better_node_available:
+                    print('A higher level node is available')
+                    loadbalancer.decrementHostToNumConnCount(chosenHost)
+                    newconn.close()
+                    loadbalancer.has_better_node = False
+                    return getConnectionBalanced(lbprops, connection_factory, cursor_factory, **kwasync)
                 return newconn
         except OperationalError:
             print('Couldn\'t connect to ', chosenHost, ' adding to failed list')
