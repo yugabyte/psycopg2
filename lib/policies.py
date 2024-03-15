@@ -4,6 +4,7 @@ import time
 import random
 import psycopg2
 import psycopg2.extensions
+import socket
 
 
 
@@ -91,12 +92,16 @@ class ClusterAwareLoadBalancer:
             host = row[0]
             public_host = row[7]
             port = row[1]
-            self.hostPortMap[host] = port
+            try: 
+                host_addr = socket.gethostbyname(host)
+            except socket.gaierror as e:
+                print(f'Error resolving {host}: {e}')
+            self.hostPortMap[host_addr] = port
             self.hostPortMap_public[public_host] = port
-            currentPrivateIps.append(host)
+            currentPrivateIps.append(host_addr)
             self.currentPublicIps.append(public_host)
             if self.useHostColumn == None :
-                if hostConnectedTo == host :
+                if hostConnectedTo == host_addr :
                     self.useHostColumn = True
                 elif hostConnectedTo == public_host :
                     self.useHostColumn = False
