@@ -94,16 +94,17 @@ class ClusterAwareLoadBalancer:
             port = row[1]
             try: 
                 host_addr = socket.gethostbyname(host)
+                public_host_addr = socket.gethostbyname(public_host) 
             except socket.gaierror as e:
                 print(f'Error resolving {host}: {e}')
             self.hostPortMap[host_addr] = port
-            self.hostPortMap_public[public_host] = port
+            self.hostPortMap_public[public_host_addr] = port
             currentPrivateIps.append(host_addr)
-            self.currentPublicIps.append(public_host)
+            self.currentPublicIps.append(public_host_addr)
             if self.useHostColumn == None :
                 if hostConnectedTo == host_addr :
                     self.useHostColumn = True
-                elif hostConnectedTo == public_host :
+                elif hostConnectedTo == public_host_addr :
                     self.useHostColumn = False
         
         return self.getPrivateOrPublicServers(self.useHostColumn, currentPrivateIps, self.currentPublicIps)
@@ -241,13 +242,18 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
             region = row[5]
             zone = row[6]
             port = row[1]
-            self.hostPortMap[host] = port
-            self.hostPortMap_public[public_host] = port
-            self.updateCurrentHostList(currentPrivateIps, self.currentPublicIps, host, public_host, cloud, region, zone)
+            try: 
+                host_addr = socket.gethostbyname(host)
+                public_host_addr = socket.gethostbyname(public_host) 
+            except socket.gaierror as e:
+                print(f'Error resolving {host}: {e}')
+            self.hostPortMap[host_addr] = port
+            self.hostPortMap_public[public_host_addr] = port
+            self.updateCurrentHostList(currentPrivateIps, self.currentPublicIps, host_addr, public_host_addr, cloud, region, zone)
             if self.useHostColumn == None :
-                if hostConnectedTo == host :
+                if hostConnectedTo == host_addr :
                     self.useHostColumn = True
-                elif hostConnectedTo == public_host :
+                elif hostConnectedTo == public_host_addr :
                     self.useHostColumn = False
         return self.getPrivateOrPublicServers(self.useHostColumn, currentPrivateIps, self.currentPublicIps)
 
