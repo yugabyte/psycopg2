@@ -119,7 +119,7 @@ class ClusterAwareLoadBalancer:
                 print(f'Error resolving {host}: {e}')
                 raise e
             try:
-                if not public_host:
+                if public_host:
                     public_host_addr = socket.gethostbyname(public_host)
             except socket.gaierror as e:
                 print(f'Error resolving {public_host}: {e}') 
@@ -305,7 +305,7 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
                 print(f'Error resolving {host}: {e}')
                 raise e
             try:
-                if not public_host:
+                if public_host:
                     public_host_addr = socket.gethostbyname(public_host)
             except socket.gaierror as e:
                 print(f'Error resolving {public_host}: {e}')  
