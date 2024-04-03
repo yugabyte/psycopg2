@@ -4,6 +4,7 @@ import time
 import random
 import psycopg2
 import psycopg2.extensions
+import socket
 
 
 
@@ -112,20 +113,31 @@ class ClusterAwareLoadBalancer:
         for row in rs :
             host = row[0]
             public_host = row[7]
+            try: 
+                host_addr = socket.gethostbyname(host)
+            except socket.gaierror as e:
+                print(f'Error resolving {host}: {e}')
+                raise e
+            try:
+                if public_host:
+                    public_host_addr = socket.gethostbyname(public_host)
+            except socket.gaierror as e:
+                print(f'Error resolving {public_host}: {e}') 
+                raise e
             cloud = row[4]
             region = row[5]
             zone = row[6]
             port = row[1]
-            self.hostPortMap[host] = port
-            self.updatePriorityMap(host,cloud,region,zone)
-            self.hostPortMap_public[public_host] = port
-            if not host in self.unreachableHosts.keys():
-                currentPrivateIps.append(host)
-                self.currentPublicIps.append(public_host)
+            self.hostPortMap[host_addr] = port
+            self.updatePriorityMap(host_addr,cloud,region,zone)
+            self.hostPortMap_public[public_host_addr] = port
+            if not host_addr in self.unreachableHosts.keys():
+                currentPrivateIps.append(host_addr)
+                self.currentPublicIps.append(public_host_addr)
             if self.useHostColumn == None :
-                if hostConnectedTo == host :
+                if hostConnectedTo == host_addr :
                     self.useHostColumn = True
-                elif hostConnectedTo == public_host :
+                elif hostConnectedTo == public_host_addr :
                     self.useHostColumn = False
         
         return self.getPrivateOrPublicServers(self.useHostColumn, currentPrivateIps, self.currentPublicIps)
@@ -287,19 +299,30 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         for row in rs :
             host = row[0]
             public_host = row[7]
+            try: 
+                host_addr = socket.gethostbyname(host)
+            except socket.gaierror as e:
+                print(f'Error resolving {host}: {e}')
+                raise e
+            try:
+                if public_host:
+                    public_host_addr = socket.gethostbyname(public_host)
+            except socket.gaierror as e:
+                print(f'Error resolving {public_host}: {e}')  
+                raise e
             cloud = row[4]
             region = row[5]
             zone = row[6]
             port = row[1]
-            self.hostPortMap[host] = port
-            self.updatePriorityMap(host, cloud, region, zone)
-            self.hostPortMap_public[public_host] = port
-            if not host in self.unreachableHosts:
-                self.updateCurrentHostList(currentPrivateIps, self.currentPublicIps, host, public_host, cloud, region, zone)
+            self.hostPortMap[host_addr] = port
+            self.updatePriorityMap(host_addr, cloud, region, zone)
+            self.hostPortMap_public[public_host_addr] = port
+            if not host_addr in self.unreachableHosts:
+                self.updateCurrentHostList(currentPrivateIps, self.currentPublicIps, host_addr, public_host_addr, cloud, region, zone)
             if self.useHostColumn == None :
-                if hostConnectedTo == host :
+                if hostConnectedTo == host_addr :
                     self.useHostColumn = True
-                elif hostConnectedTo == public_host :
+                elif hostConnectedTo == public_host_addr :
                     self.useHostColumn = False
         return self.getPrivateOrPublicServers(self.useHostColumn, currentPrivateIps, self.currentPublicIps)
 
