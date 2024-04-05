@@ -149,9 +149,18 @@ psyco_conn_close(connectionObject *self, PyObject *dummy)
     */
     PyObject *m = PyImport_ImportModule("psycopg2.loadbalanceproperties");
     PyObject *comp = PyObject_GetAttrString(m, "LoadBalanceProperties");
+    PyObject *pArgs = PyTuple_New(1);
+    PyTuple_SetItem(pArgs, 0, PyUnicode_FromString(self->dsn));
+    
+    // Create a dictionary for the second argument
+    PyObject *pDict = PyDict_New();
+    // Create keyword arguments for the constructor
+    PyObject *pKwargs = PyDict_New();
+    PyDict_SetItemString(pKwargs, "kwargs", pDict);
+    PyObject *instance = PyObject_Call(comp, pArgs, pKwargs);
     PyObject* loadbalancefunc = PyUnicode_FromString((char*)"getAppropriateLoadBalancer");
     PyObject *loadbalancer = PyObject_CallMethodObjArgs(
-                comp, loadbalancefunc,comp, NULL);
+                instance, loadbalancefunc, NULL);
 
     
     if (loadbalancer != NULL){

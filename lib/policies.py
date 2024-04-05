@@ -113,6 +113,8 @@ class ClusterAwareLoadBalancer:
         for row in rs :
             host = row[0]
             public_host = row[7]
+            host_addr = ''
+            public_host_addr = ''
             try: 
                 host_addr = socket.gethostbyname(host)
             except socket.gaierror as e:
@@ -233,6 +235,8 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
 
     def __init__(self, placementvalues, refreshInterval, failedHostTTL):
         self.hostToNumConnMap = {}
+        self.hostToNumConnCount = {}
+        self.hostToPriorityMap = {}
         self.hostPortMap = {}
         self.hostPortMap_public = {}
         self.currentPublicIps = {}
@@ -240,7 +244,7 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         self.allowedPlacements = {}
         self.fallbackPrivateIPs = {}
         self.fallbackPublicIPs = {}
-        self.refreshListSeconds = refreshInterval
+        self.refreshListSeconds = refreshInterval if refreshInterval > 0 and refreshInterval < 600 else 300
         self.failedHostsTTL = failedHostTTL
         self.parseGeoLocations()
 
@@ -299,6 +303,8 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         for row in rs :
             host = row[0]
             public_host = row[7]
+            host_addr = ''
+            public_host_addr = ''
             try: 
                 host_addr = socket.gethostbyname(host)
             except socket.gaierror as e:
@@ -355,6 +361,8 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
 
     def updateFailedHosts(self, chosenHost):
         super().updateFailedHosts(chosenHost)
+        if chosenHost in self.hostToPriorityMap.keys():
+            self.hostToPriorityMap.pop(chosenHost)
         for i in range(self.FIRST_FALLBACK, self.MAX_PREFERENCE_VALUE + 1):
             if self.fallbackPrivateIPs.get(i):
                 if chosenHost in self.fallbackPrivateIPs.get(i):
