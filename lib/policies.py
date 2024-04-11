@@ -239,7 +239,7 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         self.hostToPriorityMap = {}
         self.hostPortMap = {}
         self.hostPortMap_public = {}
-        self.currentPublicIps = {}
+        self.currentPublicIps = []
         self.placements = placementvalues
         self.allowedPlacements = {}
         self.fallbackPrivateIPs = {}
