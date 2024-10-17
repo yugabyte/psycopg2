@@ -185,7 +185,7 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
             else:
                 better_node_available = loadbalancer.hasMorePreferredNodes(chosenHost)
                 if better_node_available:
-                    print('A higher level node is available then current host: ' + chosenHost)
+                    print('A higher-level node is available than the current chosenHost: ' + chosenHost)
                     loadbalancer.decrementHostToNumConnCount(chosenHost)
                     newconn.close()
                     return getConnectionBalanced(lbprops, connection_factory, cursor_factory, **kwasync)
