@@ -5,8 +5,8 @@ class LoadBalanceProperties:
     CONNECTION_MANAGER_MAP = {}
     placements = ''
     SIMPLE_LB = 'simple'
-    refreshInterval = -1
-    failed_host_ttl_seconds = -1
+    refreshInterval = 300
+    failed_host_ttl_seconds = 5
 
     def __init__(self, dsn, **kwargs):
         self.SIMPLE_LB = 'simple'
@@ -16,7 +16,8 @@ class LoadBalanceProperties:
         self.originalProperties = kwargs
         self.loadbalance = False
         self.placements = ''
-        self.refreshInterval = -1
+        self.key = ''
+        self.refreshInterval = 300
         self.ybProperties = self.originalProperties
         self.ybDSN = None
         if self.originalDSN != None :
@@ -95,6 +96,9 @@ class LoadBalanceProperties:
     def getStrippedProperties(self):
         return self.ybProperties
 
+    def getKey(self):
+        return self.key
+
     def hasLoadBalance(self):
         return self.loadbalance
 
@@ -104,9 +108,17 @@ class LoadBalanceProperties:
             if ld == None:
                 ld = ClusterAwareLoadBalancer.getInstance(self.refreshInterval, self.failed_host_ttl_seconds)
                 LoadBalanceProperties.CONNECTION_MANAGER_MAP[self.SIMPLE_LB] = ld
+            self.key = self.SIMPLE_LB
         else:
             ld = LoadBalanceProperties.CONNECTION_MANAGER_MAP.get(self.placements)
             if ld == None :
                 ld = TopologyAwareLoadBalancer(self.placements, self.refreshInterval, self.failed_host_ttl_seconds)
                 LoadBalanceProperties.CONNECTION_MANAGER_MAP[self.placements] = ld
+            self.key = self.placements
         return ld
+    
+    def getAppropriateLoadBalancerToCloseConnection(self, lb_key):
+        if lb_key == 'none':
+            return None
+        return LoadBalanceProperties.CONNECTION_MANAGER_MAP.get(lb_key)
+    

@@ -109,6 +109,7 @@ class ClusterAwareLoadBalancer:
             hostConnectedTo = hostConnectedTo.replace('[','').replace(']','')
 
         self.hostToPriorityMap.clear()
+        self.currentPublicIps.clear()
 
         for row in rs :
             host = row[0]
@@ -200,6 +201,7 @@ class ClusterAwareLoadBalancer:
 
     def updatePriorityMap(self, host, cloud, region, zone):
         return
+    
     def hasMorePreferredNodes(self, chosenHost):
         return False
 
@@ -299,7 +301,10 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         isIpv6Addresses = ':' in hostConnectedTo
         if isIpv6Addresses:
             hostConnectedTo = hostConnectedTo.replace('[','').replace(']','')
+
         self.hostToPriorityMap.clear()
+        self.currentPublicIps.clear()
+
         for row in rs :
             host = row[0]
             public_host = row[7]

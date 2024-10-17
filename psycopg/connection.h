@@ -88,6 +88,7 @@ struct connectionObject {
     pthread_mutex_t lock;   /* the global connection lock */
 
     char *dsn;              /* data source name */
+    char *lb_key;           /* key to get load balancer instance */
     char *error;            /* temporarily stored error before raising */
     char *encoding;         /* current backend encoding */
 
