@@ -75,7 +75,7 @@ HIDDEN PyObject *psyco_null = NULL;
 
 /** connect module-level function **/
 #define psyco_connect_doc \
-"_connect(dsn, [connection_factory], [async]) -- New database connection.\n\n"
+"_connect(dsn, lb_key, [connection_factory], [async]) -- New database connection.\n\n"
 
 static PyObject *
 psyco_connect(PyObject *self, PyObject *args, PyObject *keywds)
@@ -83,12 +83,13 @@ psyco_connect(PyObject *self, PyObject *args, PyObject *keywds)
     PyObject *conn = NULL;
     PyObject *factory = NULL;
     const char *dsn = NULL;
+    const char *lb_key = NULL;
     int async = 0, async_ = 0;
 
-    static char *kwlist[] = {"dsn", "connection_factory", "async", "async_", NULL};
+    static char *kwlist[] = {"dsn", "lb_key", "connection_factory", "async", "async_", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, keywds, "s|Oii", kwlist,
-            &dsn, &factory, &async, &async_)) {
+    if (!PyArg_ParseTupleAndKeywords(args, keywds, "ss|Oii", kwlist,
+            &dsn, &lb_key, &factory, &async, &async_)) {
         return NULL;
     }
 
@@ -109,9 +110,9 @@ psyco_connect(PyObject *self, PyObject *args, PyObject *keywds)
      * to further subclass) Another dsn parameter (but is not really
      * a connection parameter that can be configured) */
     if (!async) {
-        conn = PyObject_CallFunction(factory, "s", dsn);
+        conn = PyObject_CallFunction(factory, "ss", dsn, lb_key);
     } else {
-        conn = PyObject_CallFunction(factory, "si", dsn, async);
+        conn = PyObject_CallFunction(factory, "ssi", dsn, lb_key, async);
     }
 
     return conn;

@@ -158,12 +158,13 @@ psyco_conn_close(connectionObject *self, PyObject *dummy)
     PyObject *pKwargs = PyDict_New();
     PyDict_SetItemString(pKwargs, "kwargs", pDict);
     PyObject *instance = PyObject_Call(comp, pArgs, pKwargs);
-    PyObject* loadbalancefunc = PyUnicode_FromString((char*)"getAppropriateLoadBalancer");
+    PyObject* loadbalancefunc = PyUnicode_FromString((char*)"getAppropriateLoadBalancerToCloseConnection");
+    PyObject *arg = PyUnicode_FromString(self->lb_key);
     PyObject *loadbalancer = PyObject_CallMethodObjArgs(
-                instance, loadbalancefunc, NULL);
+                instance, loadbalancefunc, arg, NULL);
 
     
-    if (loadbalancer != NULL){
+    if (loadbalancer != NULL && loadbalancer != Py_None){
         const char *val;
         val = PQhostaddr(self->pgconn);
         if (!val) {
@@ -1354,7 +1355,7 @@ static struct PyGetSetDef connectionObject_getsets[] = {
 /* initialization and finalization methods */
 
 static int
-connection_setup(connectionObject *self, const char *dsn, long int async)
+connection_setup(connectionObject *self, const char *dsn, char *lb_key, long int async)
 {
     int rv = -1;
 
@@ -1367,6 +1368,7 @@ connection_setup(connectionObject *self, const char *dsn, long int async)
     if (!(self->notice_list = PyList_New(0))) { goto exit; }
     if (!(self->notifies = PyList_New(0))) { goto exit; }
     self->async = async;
+    self->lb_key = strdup(lb_key);
     self->status = CONN_STATUS_SETUP;
     self->async_status = ASYNC_DONE;
     if (!(self->string_types = PyDict_New())) { goto exit; }
@@ -1464,15 +1466,16 @@ static int
 connection_init(PyObject *obj, PyObject *args, PyObject *kwds)
 {
     const char *dsn;
+    char *lb_key = NULL;
     long int async = 0, async_ = 0;
-    static char *kwlist[] = {"dsn", "async", "async_", NULL};
+    static char *kwlist[] = {"dsn", "lb_key", "async", "async_", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|ll", kwlist,
-            &dsn, &async, &async_))
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "ss|ll", kwlist,
+            &dsn, &lb_key, &async, &async_))
         return -1;
 
     if (async_) { async = async_; }
-    return connection_setup((connectionObject *)obj, dsn, async);
+    return connection_setup((connectionObject *)obj, dsn, lb_key, async);
 }
 
 static PyObject *

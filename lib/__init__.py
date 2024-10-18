@@ -135,7 +135,7 @@ def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
     dsn = lbprops.getStrippedDSN()
     kwargs = lbprops.getStrippedProperties()
     dsn = _ext.make_dsn(dsn, **kwargs)
-    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+    conn = _connect(dsn, 'none', connection_factory=connection_factory, **kwasync)
     if cursor_factory is not None:
         conn.cursor_factory = cursor_factory
     return conn
@@ -150,14 +150,12 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
     dsn = _ext.make_dsn(dsn,**kwargs)
     needsRefresh = loadbalancer.needsRefresh()
     if chosenHost == '' or needsRefresh:
-        controlConnection = _connect(dsn, connection_factory=connection_factory, **kwasync)
+        controlConnection = _connect(dsn, 'none', connection_factory=connection_factory, **kwasync)
         if cursor_factory is not None:
             controlConnection.cursor_factory = cursor_factory
         if not loadbalancer.refresh(controlConnection):
             return None
         if chosenHost != '':
-            dsnhost = controlConnection.info.host_addr
-            loadbalancer.updateConnectionMap(dsnhost, 1)
             loadbalancer.updateConnectionMap(chosenHost, -1)
         
         try:
@@ -167,6 +165,8 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
 
         # Getting chosenHost again after refresh for the latest least loaded server
         
+        unreachableHosts = loadbalancer.getUnreachableHosts()
+        failedHosts = unreachableHosts
         chosenHost = loadbalancer.getLeastLoadedServer(failedHosts)
     
     if chosenHost == '':
@@ -175,7 +175,7 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
     while chosenHost != '':
         try :
             dsn = getDSNWithChosenHost(loadbalancer,dsn,chosenHost)
-            newconn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+            newconn = _connect(dsn, lbprops.getKey(), connection_factory=connection_factory, **kwasync)
             if cursor_factory is not None:
                 newconn.cursor_factory = cursor_factory
             if not loadbalancer.refresh(newconn):
@@ -185,10 +185,9 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
             else:
                 better_node_available = loadbalancer.hasMorePreferredNodes(chosenHost)
                 if better_node_available:
-                    print('A higher level node is available')
+                    print('A higher-level node is available than the current chosenHost: ' + chosenHost)
                     loadbalancer.decrementHostToNumConnCount(chosenHost)
                     newconn.close()
-                    loadbalancer.has_better_node = False
                     return getConnectionBalanced(lbprops, connection_factory, cursor_factory, **kwasync)
                 return newconn
         except OperationalError:
