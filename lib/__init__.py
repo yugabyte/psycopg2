@@ -130,7 +130,7 @@ def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
         conn = getConnectionBalanced(lbprops, connection_factory, cursor_factory, **kwasync)
         if conn != None:
             return conn
-        print('Failed to apply load balancing, Trying normal connection')
+        raise psycopg2.OperationalError("Could not find a server to connect to.")
     
     dsn = lbprops.getStrippedDSN()
     kwargs = lbprops.getStrippedProperties()
@@ -194,11 +194,14 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
             print('Couldn\'t connect to ', chosenHost, ' adding to failed list')
             failedHosts.append(chosenHost)
             loadbalancer.updateFailedHosts(chosenHost)
+            loadbalancer.setForRefresh()
             try :
                 newconn.close()
             except Exception:
                 print('For cleanup purposes')
             chosenHost = loadbalancer.getLeastLoadedServer(failedHosts)
+    
+    return None
     
 def getDSNWithChosenHost(loadbalancer, dsn, chosenHost):
     port = loadbalancer.getPort(chosenHost)

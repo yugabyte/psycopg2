@@ -54,7 +54,9 @@ def create_connections(url, tkValue, counts):
     
     verifyLocalConnections(counts, tkValue, 0)
 
-def verifyLocalConnections(counts, key, k):
+def verifyLocalConnections(counts, tkValue, k):
+
+    key = "true&" + tkValue + "&False"
     
     try:
         if key not in LoadBalanceProperties.CONNECTION_MANAGER_MAP:
