@@ -21,7 +21,7 @@ class ClusterAwareLoadBalancer:
     
     def __init__(self, loadBalance, refreshInterval, failedHostTTL):
         self.loadBalance = loadBalance
-        self.failedHostsTTL = failedHostTTL if failedHostTTL > 0 else 5
+        self.failedHostsTTL = failedHostTTL if failedHostTTL >= 0 and failedHostTTL <= 60 else 5
         self.lastServerListFetchTime = 0
         self.servers = []
         self.primaryNodes = []
@@ -35,7 +35,7 @@ class ClusterAwareLoadBalancer:
         self.unreachableHosts = {}
         self.currentPrivateIps = {}
         self.currentPublicIps = {}
-        self.refreshListSeconds = refreshInterval if refreshInterval > 0 and refreshInterval < 600 else 300
+        self.refreshListSeconds = refreshInterval if refreshInterval >= 0 and refreshInterval <= 600 else 300
         self.useHostColumn = None
     
     def getPort(self, host):
@@ -305,8 +305,8 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         self.allowedPlacements = {}
         self.fallbackPrivateIPs = {}
         self.fallbackPublicIPs = {}
-        self.refreshListSeconds = refreshInterval if refreshInterval > 0 and refreshInterval < 600 else 300
-        self.failedHostsTTL = failedHostTTL
+        self.refreshListSeconds = refreshInterval if refreshInterval >= 0 and refreshInterval <= 600 else 300
+        self.failedHostsTTL = failedHostTTL if failedHostTTL >= 0 and failedHostTTL <= 60 else 5
         self.parseGeoLocations()
 
     def parseGeoLocations(self):
@@ -407,7 +407,7 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         return self.getPrivateOrPublicServers(self.useHostColumn, self.currentPrivateIps, self.currentPublicIps)
 
     def hasMorePreferredNodes(self, chosenHost):
-        if self.loadBalance == 'only-rr' or self.loadBalance == 'prefer-rr' or self.loadBalance == 'any':
+        if self.loadBalance == 'only-rr' or self.loadBalance == 'prefer-rr' or self.loadBalance == 'any' or self.loadBalance == 'true':
             if chosenHost in self.hostToPriorityMapRR:
                 chosenHostPriority = self.hostToPriorityMapRR.get(chosenHost)
                 if chosenHostPriority != None :
@@ -415,7 +415,7 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
                         if i in self.hostToPriorityMapRR.values():
                             return True
         
-        if self.loadBalance == 'only-primary' or self.loadBalance == 'prefer-primary' or self.loadBalance == 'any':
+        if self.loadBalance == 'only-primary' or self.loadBalance == 'prefer-primary' or self.loadBalance == 'any' or self.loadBalance == 'true':
             if chosenHost in self.hostToPriorityMapPrimary:
                 chosenHostPriority = self.hostToPriorityMapPrimary.get(chosenHost)
                 if chosenHostPriority != None :

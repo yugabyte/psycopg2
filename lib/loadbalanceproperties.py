@@ -139,6 +139,8 @@ class LoadBalanceProperties:
                 ld = TopologyAwareLoadBalancer(self.loadbalance, self.placements, self.refreshInterval, self.failed_host_ttl_seconds, self.fallback_to_topology_keys_only)
                 LoadBalanceProperties.CONNECTION_MANAGER_MAP[lbKey] = ld
             self.key = lbKey
+            ld.refreshListSeconds = self.refreshInterval if self.refreshInterval >= 0 and self.refreshInterval <= 600 else 300
+            ld.failedHostsTTL = self.failed_host_ttl_seconds if self.failed_host_ttl_seconds >= 0 and self.failed_host_ttl_seconds <= 60 else 5
         return ld
     
     def getAppropriateLoadBalancerToCloseConnection(self, lb_key):
