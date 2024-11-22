@@ -94,9 +94,11 @@ Load balancing connection properties:
 
 The following connection properties need to be added to enable load balancing:
 
-* load_balance - enable cluster-aware load balancing by setting this property to True; disabled by default.
+* load_balance - enable cluster-aware load balancing by setting this property to true or any; disabled by default. `This section`_ explains the different values for `load_balance` parameter.
 * topology_keys - provide comma-separated geo-location values to enable topology-aware load balancing. Geo-locations can be provided as cloud.region.zone.
-* yb-servers-refresh-interval - The list of servers, to balance the connection load on, are refreshed periodically every 5 minutes by default. This time can be regulated by this property.
+* yb_servers_refresh_interval - The list of servers, to balance the connection load on, are refreshed periodically every 5 minutes by default. This time can be regulated by this property.
+
+.. _`This section`: #read-replica-cluster
 
 Pass new connection properties for load balancing in the connection URL or in the dictionary. To enable uniform load balancing across all servers, you set the load-balance property to True in the URL, as per the following example.
 
@@ -112,11 +114,11 @@ To specify topology keys, you set the topology_keys property to comma separated 
 
 Connection String::
 
-    conn = psycopg2.connect("dbname=database_name host=hostname port=port user=username  password=password load_balance=true topology_keys=cloud1.region1.zone1,cloud2.region2.zone2")
+    conn = psycopg2.connect("dbname=database_name host=hostname port=port user=username  password=password load_balance=any topology_keys=cloud1.region1.zone1,cloud2.region2.zone2")
 
 Connection Dictionary::
 
-    conn = psycopg2.connect(user = 'username', password='xxx', host = 'hostname', port = 'port', dbname = 'database_name', load_balance='True', topology_keys='cloud1.region1.zone1,cloud2.region2.zone2')
+    conn = psycopg2.connect(user = 'username', password='xxx', host = 'hostname', port = 'port', dbname = 'database_name', load_balance='any', topology_keys='cloud1.region1.zone1,cloud2.region2.zone2')
 
 Multiple topologies can also be passed to the Topology Keys property, and each of them can also be given a preference value, as per the following example.::
 
@@ -125,3 +127,25 @@ Multiple topologies can also be passed to the Topology Keys property, and each o
 The preference value (appended after :) is optional. So it is compatible with previous syntax of specifying cloud placements.
 
 Preference value :1 means primary placement zone(s), value :2 means first fallback, value :3 means second fallback and so on.
+
+Other Connection Parameters
+---------------------------
+
+* fallback_to_topology_keys_only - Applicable only for TopologyAware Load Balancing. When set to true, the smart driver does not attempt to connect to servers outside of primary and fallback placements specified via property. The default behaviour is to fallback to any available server in the entire cluster.(default value: false)
+
+* failed_host_ttl_seconds - The driver marks a server as failed with a timestamp, when it cannot connect to it. Later, whenever it refreshes the server list via yb_servers(), if it sees the failed server in the response, it marks the server as UP only if failed_host_ttl_seconds time has elapsed. (The yb_servers() function does not remove a failed server immediately from its result and retains it for a while.)(default value: 5 seconds)
+
+Read Replica Cluster
+--------------------
+
+psycopg2 smart driver also enables load balancing across nodes in primary clusters which have associated Read Replica cluster.
+
+The connection property `load_balance` allows five values using which users can distribute connections among different combination of nodes as per their requirements:
+
+- `only-rr` - Create connections only on Read Replica nodes
+- `only-primary` - Create connections only on primary cluster nodes
+- `prefer-rr` - Create connections on Read Replica nodes. If none available, on any node in the cluster including primary cluster nodes
+- `prefer-primary` - Create connections on primary cluster nodes. If none available, on any node in the cluster including Read Replica nodes
+- `any` or `true` - Equivalent to value true. Create connections on any node in the primary or Read Replica cluster
+
+default value is false
