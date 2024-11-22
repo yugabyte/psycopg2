@@ -96,7 +96,7 @@ The following connection properties need to be added to enable load balancing:
 
 * load_balance - enable cluster-aware load balancing by setting this property to true or any; disabled by default. `This section`_ explains the different values for `load_balance` parameter.
 * topology_keys - provide comma-separated geo-location values to enable topology-aware load balancing. Geo-locations can be provided as cloud.region.zone.
-* yb_servers_refresh_interval - The list of servers, to balance the connection load on, are refreshed periodically every 5 minutes by default. This time can be regulated by this property.
+* yb_servers_refresh_interval - The list of servers, to balance the connection load on, is refreshed periodically every 5 minutes by default. This time can be regulated by this property.
 
 .. _`This section`: #read-replica-cluster
 
