@@ -513,7 +513,6 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
             self.populateHosts(currentPrivateIps, host, node_type)
             if len(public_host.strip()) != 0:
                 self.populateHosts(currentPublicIps, public_host, node_type)
-                currentPublicIps.append(public_host)
         else:
             for key,value in self.allowedPlacements.items():
                 if self.checkIfPresent(cp, value):
