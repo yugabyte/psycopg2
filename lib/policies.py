@@ -5,12 +5,12 @@ import random
 import psycopg2
 import psycopg2.extensions
 import socket
+import os
 
 
 
 class ClusterAwareLoadBalancer:
 
-    GET_SERVERS_QUERY = "select * from yb_servers()"
     unreachableHosts = {}
     hostToNumConnMap = {}
     useHostColumn = None
@@ -48,9 +48,9 @@ class ClusterAwareLoadBalancer:
         primaryhostlist = 0
         rrhostlist = 0
         if('primary' in self.currentPublicIps):
-            primaryhostlist = len(self.checkCurrentPublicIps['primary'])
+            primaryhostlist = len(self.currentPublicIps['primary'])
         if('read_replica' in self.currentPublicIps):
-            rrhostlist = len(self.checkCurrentPublicIps['read_replica'])
+            rrhostlist = len(self.currentPublicIps['read_replica'])
         
         if primaryhostlist == 0 and rrhostlist == 0:
             return False
@@ -122,9 +122,18 @@ class ClusterAwareLoadBalancer:
         firstTime = not self.servers
         return (firstTime or diff > self.refreshListSeconds)
 
+    # For Testing purpose only.
+    def getRefreshQuery(self):
+        test_yb_public_ip = os.getenv("TEST_YB_PUBLIC_IP")
+        if test_yb_public_ip == "True":
+            return "select * from test_yb_servers"
+        else:
+            return "select * from yb_servers()"
+
     def getCurrentServers(self, conn):
+        GET_SERVERS_QUERY = self.getRefreshQuery()
         cur = conn.cursor()
-        cur.execute(self.GET_SERVERS_QUERY)
+        cur.execute(GET_SERVERS_QUERY)
         rs = cur.fetchall()
         hostConnectedTo = conn.info.host_addr
         isIpv6Addresses = ':' in hostConnectedTo
@@ -173,7 +182,7 @@ class ClusterAwareLoadBalancer:
             else:
                 self.updatePriorityMap(host_addr,cloud,region,zone,node_type)
 
-            if not host_addr in self.unreachableHosts.keys():
+            if self.useHostColumn != False and not host_addr in self.unreachableHosts.keys() or self.useHostColumn == False and not public_host in self.unreachableHosts.keys():
                 if node_type == 'primary':
                     if self.useHostColumn == False:
                         self.primaryNodes.append(public_host)
@@ -384,8 +393,9 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
 
     
     def getCurrentServers(self, conn):
+        GET_SERVERS_QUERY = self.getRefreshQuery()
         cur = conn.cursor()
-        cur.execute(self.GET_SERVERS_QUERY)
+        cur.execute(GET_SERVERS_QUERY)
         rs = cur.fetchall()
         hostConnectedTo = conn.info.host_addr
         isIpv6Addresses = ':' in hostConnectedTo
@@ -436,7 +446,7 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
             else:
                 self.updatePriorityMap(host_addr,cloud,region,zone,node_type)
 
-            if not host_addr in self.unreachableHosts:
+            if self.useHostColumn != False and not host_addr in self.unreachableHosts.keys() or self.useHostColumn == False and not public_host in self.unreachableHosts.keys():
                 if node_type == 'primary':
                     if self.useHostColumn == False:
                         self.primaryNodes.append(public_host)
@@ -526,14 +536,14 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         if servers:
             return servers
         for i in range(self.FIRST_FALLBACK,self.MAX_PREFERENCE_VALUE + 1):
-            if self.checkIfNodeTypePresent(self.fallbackPrivateIPs.get(i)):
+            if useHostColumn != False and self.checkIfNodeTypePresent(self.fallbackPrivateIPs.get(i)) or useHostColumn == False and self.checkIfNodeTypePresent(self.fallbackPublicIPs.get(i)):
                 servers = super().getPrivateOrPublicServers(useHostColumn, self.fallbackPrivateIPs.get(i), self.fallbackPublicIPs.get(i))
                 return servers
 
         if self.explicitFallbackOnly and self.loadBalance != 'prefer-primary' and self.loadBalance != 'prefer-rr':
             return []
             
-        if self.checkIfNodeTypePresent(self.fallbackPrivateIPs.get(self.REST_OF_CLUSTER)):
+        if useHostColumn != False and self.checkIfNodeTypePresent(self.fallbackPrivateIPs.get(self.REST_OF_CLUSTER)) or useHostColumn == False and self.checkIfNodeTypePresent(self.fallbackPublicIPs.get(self.REST_OF_CLUSTER)):
             servers = super().getPrivateOrPublicServers(useHostColumn, self.fallbackPrivateIPs.get(self.REST_OF_CLUSTER), self.fallbackPublicIPs.get(self.REST_OF_CLUSTER))
             return servers
         
