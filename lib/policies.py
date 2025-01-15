@@ -131,9 +131,9 @@ class ClusterAwareLoadBalancer:
             return "select * from yb_servers()"
 
     def getCurrentServers(self, conn):
-        GET_SERVERS_QUERY = self.getRefreshQuery()
+        getServersQuery = self.getRefreshQuery()
         cur = conn.cursor()
-        cur.execute(GET_SERVERS_QUERY)
+        cur.execute(getServersQuery)
         rs = cur.fetchall()
         hostConnectedTo = conn.info.host_addr
         isIpv6Addresses = ':' in hostConnectedTo
@@ -393,9 +393,9 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
 
     
     def getCurrentServers(self, conn):
-        GET_SERVERS_QUERY = self.getRefreshQuery()
+        getServersQuery = self.getRefreshQuery()
         cur = conn.cursor()
-        cur.execute(GET_SERVERS_QUERY)
+        cur.execute(getServersQuery)
         rs = cur.fetchall()
         hostConnectedTo = conn.info.host_addr
         isIpv6Addresses = ':' in hostConnectedTo
