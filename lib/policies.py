@@ -6,6 +6,7 @@ import psycopg2
 import psycopg2.extensions
 import socket
 import os
+from psycopg2.logger import logger
 
 
 
@@ -62,6 +63,7 @@ class ClusterAwareLoadBalancer:
         return True
     
     def getLeastLoadedServer(self,failedhosts):
+        logger.debug("getLeastLoadedServer(): failed host list: %s, hostToNumConnMap: %s", failedhosts, self.hostToNumConnMap)
         if not self.hostToNumConnMap:
             privatehosts = {}
             if self.useHostColumn == True:
@@ -83,6 +85,7 @@ class ClusterAwareLoadBalancer:
         min = sys.maxsize
         for h in self.hostToNumConnMap.keys():
             if h in failedhosts:
+                logger.debug("Skipping failed host " + h)
                 continue
             currLoad = self.hostToNumConnMap.get(h)
             if currLoad < min:
@@ -97,11 +100,13 @@ class ClusterAwareLoadBalancer:
             chosenHost = minConnectionsHostList[idx]
         
         if chosenHost != '':
+            logger.debug("Host chosen for new connection: " + chosenHost)
             self.updateConnectionMap(chosenHost,1)
         elif self.useHostColumn == None:
             newList = []
             newList = newList + self.getAppropriateHosts(self.currentPublicIps, False)
             if newList:
+                logger.info("No host found, attempting the public ips...")
                 self.useHostColumn = False
                 self.servers = newList
                 self.unreachableHosts.clear()
@@ -114,6 +119,7 @@ class ClusterAwareLoadBalancer:
 
                 return self.getLeastLoadedServer(failedhosts)
             
+        logger.debug("Host chosen for new connection: " + chosenHost)
         return chosenHost
     
     def needsRefresh(self):
@@ -126,12 +132,15 @@ class ClusterAwareLoadBalancer:
     def getRefreshQuery(self):
         test_yb_public_ip = os.getenv("TEST_YB_PUBLIC_IP")
         if test_yb_public_ip == "True":
+            logger.warning("Refreshing cluster information from dummy data, to be only used for testing.")
             return "select * from test_yb_servers"
         else:
+            logger.debug("Cluster info to be refreshed using yb_servers()")
             return "select * from yb_servers()"
 
     def getCurrentServers(self, conn):
         getServersQuery = self.getRefreshQuery()
+        logger.debug("Executing query: " + getServersQuery + " to fetch list of servers")
         cur = conn.cursor()
         cur.execute(getServersQuery)
         rs = cur.fetchall()
@@ -177,6 +186,8 @@ class ClusterAwareLoadBalancer:
                 elif hostConnectedTo == public_host_addr :
                     self.useHostColumn = False
             
+            logger.debug("getCurrentServers(): useHostColumn set as %s", self.useHostColumn)
+
             if self.useHostColumn == False:
                 self.updatePriorityMap(public_host_addr,cloud,region,zone,node_type)
             else:
@@ -211,6 +222,7 @@ class ClusterAwareLoadBalancer:
         if not currentHosts:
             if (self.loadBalance == 'prefer-primary' and not self.primaryNodes) or (self.loadBalance == 'prefer-rr' and not self.rrNodes):
                 currentHosts = self.getAppropriateHosts(privateHosts, True) if useHostColumn else self.getAppropriateHosts(publicHosts, True)
+        logger.debug("List of servers got: %s useHostColumn %s", currentHosts, useHostColumn)
         return currentHosts
 
     def getAppropriateHosts(self, hosts, preferred):
@@ -247,7 +259,10 @@ class ClusterAwareLoadBalancer:
         possiblyReachableHosts = []
         for host, time_inactive in self.unreachableHosts.items():
             if (currTime - time_inactive) > self.failedHostsTTL:
+                logger.debug("Putting host  " + host + " into possiblyReachableHosts")
                 possiblyReachableHosts.append(host)
+            else:
+                logger.debug("Not removing this host from unreachableHosts: " + host)
 
         emptyHostToNumConnMap = False
         for h in possiblyReachableHosts:
@@ -255,8 +270,10 @@ class ClusterAwareLoadBalancer:
             emptyHostToNumConnMap = True
 
         if emptyHostToNumConnMap and self.hostToNumConnMap:
+            logger.debug("Clearing hostToNumConnMap: %s", self.hostToNumConnMap.keys())
             for h in self.hostToNumConnMap:
                 self.hostToNumConnCount[h] = self.hostToNumConnMap[h]
+            logger.debug("Hosts in hostToNumConnCount: %s", self.hostToNumConnCount)
             self.hostToNumConnMap.clear()
         self.servers = self.getCurrentServers(conn)
         if not self.servers:
@@ -268,12 +285,14 @@ class ClusterAwareLoadBalancer:
                     self.hostToNumConnMap[h] = self.hostToNumConnCount[h]
                 else:
                     self.hostToNumConnMap[h] = 0
+                logger.debug("Added host " + h + " to hostToNumConnMap, with count %d", self.hostToNumConnMap[h])
         return True
 
     def getServers(self):
         return self.servers
 
     def updateConnectionMap(self, host, incDec):
+        logger.debug("updating connection count for " + host + " by %d", incDec)
         currentCount = self.hostToNumConnMap.get(host)
         if currentCount == 0 and incDec < 0 :
             return
@@ -381,7 +400,7 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         if len(placementParts) != 3 or placementParts[0] == '*' or placementParts[1] == '*':
             raise ValueError('Ignoring malformed topology-key property value')
         cp = self.getPlacementMap(placementParts[0], placementParts[1], placementParts[2])
-
+        logger.debug("Adding placement %s to allowed list", cp)
         allowedPlacements.append(cp)
 
     def getPlacementMap(self, cloud, region, zone):
@@ -394,6 +413,7 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
     
     def getCurrentServers(self, conn):
         getServersQuery = self.getRefreshQuery()
+        logger.debug("Executing query: " + getServersQuery + " to fetch list of servers")
         cur = conn.cursor()
         cur.execute(getServersQuery)
         rs = cur.fetchall()
@@ -441,6 +461,8 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
                 elif hostConnectedTo == public_host_addr :
                     self.useHostColumn = False
             
+            logger.debug("getCurrentServers(): useHostColumn set as %s", self.useHostColumn)
+
             if self.useHostColumn == False:
                 self.updatePriorityMap(public_host_addr,cloud,region,zone,node_type)
             else:
@@ -482,6 +504,7 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
     def updatePriorityMap(self, host, cloud, region, zone, node_type):
         if not host in self.unreachableHosts:
             priority = self.getPriority(cloud, region, zone)
+            logger.debug("Priority of host %s = %d", host, priority)
             if node_type == 'primary':
                 self.hostToPriorityMapPrimary[host] = priority
             else:
@@ -496,11 +519,14 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         for i in range(1, self.MAX_PREFERENCE_VALUE + 1):
             if self.allowedPlacements.get(i):
                 if self.checkIfPresent(cp, self.allowedPlacements.get(i)):
+                    logger.debug("Returning priority %d", i)
                     return i
-
+        logger.debug("CloudPlacement %s does not belong to Primary_Placement or any of the " +
+            "Fallback_Placements so returning %d as priority", cp, self.MAX_PREFERENCE_VALUE + 1)
         return self.MAX_PREFERENCE_VALUE + 1
 
     def updateFailedHosts(self, chosenHost):
+        logger.debug("Marking %s as Down", chosenHost)
         super().updateFailedHosts(chosenHost)
 
         if chosenHost in self.hostToPriorityMapPrimary.keys():
@@ -514,8 +540,10 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
 
         for i in range(self.FIRST_FALLBACK, self.MAX_PREFERENCE_VALUE + 1):
             if self.removeHost(self.fallbackPrivateIPs.get(i), chosenHost):
+                logger.debug("Removing failed host %s from fallbackPrivateIPs level %d", chosenHost, (i - 1))
                 return
             if self.removeHost(self.fallbackPublicIPs.get(i), chosenHost):
+                logger.debug("Removing failed host %s from fallbackPublicIPs level %d", chosenHost, (i - 1))
                 return
             
         if self.removeHost(self.fallbackPrivateIPs.get(self.REST_OF_CLUSTER), chosenHost):
@@ -527,6 +555,7 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         return
 
     def decrementHostToNumConnCount(self, chosenHost):
+        logger.debug("Decreasing connection count of " + chosenHost)
         currentCount = self.hostToNumConnCount.get(chosenHost)
         if currentCount != None and currentCount != 0 :
             self.hostToNumConnCount[chosenHost] = currentCount - 1
@@ -537,6 +566,7 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
             return servers
         for i in range(self.FIRST_FALLBACK,self.MAX_PREFERENCE_VALUE + 1):
             if useHostColumn != False and self.checkIfNodeTypePresent(self.fallbackPrivateIPs.get(i)) or useHostColumn == False and self.checkIfNodeTypePresent(self.fallbackPublicIPs.get(i)):
+                logger.debug("Attempting to connect servers in fallback level-%d", (i - 1))
                 servers = super().getPrivateOrPublicServers(useHostColumn, self.fallbackPrivateIPs.get(i), self.fallbackPublicIPs.get(i))
                 return servers
 
@@ -544,6 +574,7 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
             return []
             
         if useHostColumn != False and self.checkIfNodeTypePresent(self.fallbackPrivateIPs.get(self.REST_OF_CLUSTER)) or useHostColumn == False and self.checkIfNodeTypePresent(self.fallbackPublicIPs.get(self.REST_OF_CLUSTER)):
+            logger.debug("Returning servers from rest of the cluster.")
             servers = super().getPrivateOrPublicServers(useHostColumn, self.fallbackPrivateIPs.get(self.REST_OF_CLUSTER), self.fallbackPublicIPs.get(self.REST_OF_CLUSTER))
             return servers
         
@@ -564,12 +595,14 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
     def updateCurrentHostList(self, currentPrivateIps, currentPublicIps, host, public_host, cloud, region, zone, node_type):
         cp = self.getPlacementMap(cloud, region, zone)
         if self.checkIfPresent(cp, self.allowedPlacements[self.PRIMARY_PLACEMENTS]):
+            logger.debug("AllowedPlacements set: %s returned contains true for cp: %s" , self.allowedPlacements, cp)
             self.populateHosts(currentPrivateIps, host, node_type)
             if len(public_host.strip()) != 0:
                 self.populateHosts(currentPublicIps, public_host, node_type)
         else:
             for key,value in self.allowedPlacements.items():
                 if self.checkIfPresent(cp, value):
+                    logger.debug("CloudPlacement %s is part of fallback levels", cp)
                     hosts = self.computeDictIfAbsent(self.fallbackPrivateIPs, key)
                     self.populateHosts(hosts, host, node_type)
                     self.fallbackPrivateIPs[key] = hosts
@@ -587,6 +620,8 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
                 remainingpublicIPs = self.computeDictIfAbsent(self.fallbackPublicIPs, self.REST_OF_CLUSTER)
                 self.populateHosts(remainingpublicIPs, public_host, node_type)
                 self.fallbackPublicIPs[self.REST_OF_CLUSTER] = remainingpublicIPs
+            
+            logger.debug("AllowedPlacements set: %s returned contains false for cp: %s", self.allowedPlacements, cp)
 
     def computeDictIfAbsent(self, cloudplacement, index):
         if index not in cloudplacement:
