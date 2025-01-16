@@ -5,12 +5,12 @@ import random
 import psycopg2
 import psycopg2.extensions
 import socket
+import os
 
 
 
 class ClusterAwareLoadBalancer:
 
-    GET_SERVERS_QUERY = "select * from yb_servers()"
     unreachableHosts = {}
     hostToNumConnMap = {}
     useHostColumn = None
@@ -43,11 +43,32 @@ class ClusterAwareLoadBalancer:
         if port == None :
             port = self.hostPortMap_public.get(host)
         return port
+
+    def checkCurrentPublicIps(self):
+        primaryhostlist = 0
+        rrhostlist = 0
+        if('primary' in self.currentPublicIps):
+            primaryhostlist = len(self.currentPublicIps['primary'])
+        if('read_replica' in self.currentPublicIps):
+            rrhostlist = len(self.currentPublicIps['read_replica'])
+        
+        if primaryhostlist == 0 and rrhostlist == 0:
+            return False
+        if self.loadBalance == 'only-primary' and primaryhostlist == 0:
+            return False
+        if self.loadBalance == 'only-rr' and rrhostlist == 0:
+            return False
+                
+        return True
     
     def getLeastLoadedServer(self,failedhosts):
         if not self.hostToNumConnMap:
             privatehosts = {}
-            self.servers = self.getPrivateOrPublicServers(self.useHostColumn, privatehosts, self.currentPublicIps)
+            if self.useHostColumn == True:
+                publichosts = self.currentPublicIps
+            else:
+                publichosts = {}
+            self.servers = self.getPrivateOrPublicServers(self.useHostColumn, privatehosts, publichosts)
             if self.servers:
                 for h in self.servers:
                     if not h in self.hostToNumConnMap.keys():
@@ -55,7 +76,7 @@ class ClusterAwareLoadBalancer:
                             self.hostToNumConnMap[h] = self.hostToNumConnCount[h]
                         else:
                             self.hostToNumConnMap[h] = 0
-            elif not self.loadBalance in self.currentPublicIps:
+            elif not self.checkCurrentPublicIps():
                 return '' 
         chosenHost = ''
         minConnectionsHostList = []
@@ -79,8 +100,7 @@ class ClusterAwareLoadBalancer:
             self.updateConnectionMap(chosenHost,1)
         elif self.useHostColumn == None:
             newList = []
-            if self.loadBalance in self.currentPublicIps:
-                newList = newList + self.currentPublicIps[self.loadBalance]
+            newList = newList + self.getAppropriateHosts(self.currentPublicIps, False)
             if newList:
                 self.useHostColumn = False
                 self.servers = newList
@@ -102,9 +122,18 @@ class ClusterAwareLoadBalancer:
         firstTime = not self.servers
         return (firstTime or diff > self.refreshListSeconds)
 
+    # For Testing purpose only.
+    def getRefreshQuery(self):
+        test_yb_public_ip = os.getenv("TEST_YB_PUBLIC_IP")
+        if test_yb_public_ip == "True":
+            return "select * from test_yb_servers"
+        else:
+            return "select * from yb_servers()"
+
     def getCurrentServers(self, conn):
+        getServersQuery = self.getRefreshQuery()
         cur = conn.cursor()
-        cur.execute(self.GET_SERVERS_QUERY)
+        cur.execute(getServersQuery)
         rs = cur.fetchall()
         hostConnectedTo = conn.info.host_addr
         isIpv6Addresses = ':' in hostConnectedTo
@@ -140,21 +169,33 @@ class ClusterAwareLoadBalancer:
             zone = row[6]
             port = row[1]
             self.hostPortMap[host_addr] = port
-            self.updatePriorityMap(host_addr,cloud,region,zone,node_type)
             self.hostPortMap_public[public_host_addr] = port
-            if not host_addr in self.unreachableHosts.keys():
-                if node_type == 'primary':
-                    self.primaryNodes.append(host)
-                else:
-                    self.rrNodes.append(host)
-                self.populateHosts(self.currentPrivateIps, host_addr, node_type)
-                if public_host_addr:
-                    self.populateHosts(self.currentPublicIps, public_host_addr, node_type)
+
             if self.useHostColumn == None :
                 if hostConnectedTo == host_addr :
                     self.useHostColumn = True
                 elif hostConnectedTo == public_host_addr :
                     self.useHostColumn = False
+            
+            if self.useHostColumn == False:
+                self.updatePriorityMap(public_host_addr,cloud,region,zone,node_type)
+            else:
+                self.updatePriorityMap(host_addr,cloud,region,zone,node_type)
+
+            if self.useHostColumn != False and not host_addr in self.unreachableHosts.keys() or self.useHostColumn == False and not public_host in self.unreachableHosts.keys():
+                if node_type == 'primary':
+                    if self.useHostColumn == False:
+                        self.primaryNodes.append(public_host)
+                    else:
+                        self.primaryNodes.append(host)
+                else:
+                    if self.useHostColumn == False:
+                        self.rrNodes.append(public_host)
+                    else:
+                        self.rrNodes.append(host)
+                self.populateHosts(self.currentPrivateIps, host_addr, node_type)
+                if public_host_addr:
+                    self.populateHosts(self.currentPublicIps, public_host_addr, node_type)
         
         return self.getPrivateOrPublicServers(self.useHostColumn, self.currentPrivateIps, self.currentPublicIps)
         
@@ -352,8 +393,9 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
 
     
     def getCurrentServers(self, conn):
+        getServersQuery = self.getRefreshQuery()
         cur = conn.cursor()
-        cur.execute(self.GET_SERVERS_QUERY)
+        cur.execute(getServersQuery)
         rs = cur.fetchall()
         hostConnectedTo = conn.info.host_addr
         isIpv6Addresses = ':' in hostConnectedTo
@@ -391,19 +433,31 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
             zone = row[6]
             port = row[1]
             self.hostPortMap[host_addr] = port
-            self.updatePriorityMap(host_addr, cloud, region, zone, node_type)
             self.hostPortMap_public[public_host_addr] = port
-            if not host_addr in self.unreachableHosts:
-                if node_type == 'primary':
-                    self.primaryNodes.append(host)
-                else:
-                    self.rrNodes.append(host)
-                self.updateCurrentHostList(self.currentPrivateIps, self.currentPublicIps, host_addr, public_host_addr, cloud, region, zone, node_type)
+
             if self.useHostColumn == None :
                 if hostConnectedTo == host_addr :
                     self.useHostColumn = True
                 elif hostConnectedTo == public_host_addr :
                     self.useHostColumn = False
+            
+            if self.useHostColumn == False:
+                self.updatePriorityMap(public_host_addr,cloud,region,zone,node_type)
+            else:
+                self.updatePriorityMap(host_addr,cloud,region,zone,node_type)
+
+            if self.useHostColumn != False and not host_addr in self.unreachableHosts.keys() or self.useHostColumn == False and not public_host in self.unreachableHosts.keys():
+                if node_type == 'primary':
+                    if self.useHostColumn == False:
+                        self.primaryNodes.append(public_host)
+                    else:
+                        self.primaryNodes.append(host)
+                else:
+                    if self.useHostColumn == False:
+                        self.rrNodes.append(public_host)
+                    else:
+                        self.rrNodes.append(host)
+                self.updateCurrentHostList(self.currentPrivateIps, self.currentPublicIps, host_addr, public_host_addr, cloud, region, zone, node_type)
         return self.getPrivateOrPublicServers(self.useHostColumn, self.currentPrivateIps, self.currentPublicIps)
 
     def hasMorePreferredNodes(self, chosenHost):
@@ -482,14 +536,14 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
         if servers:
             return servers
         for i in range(self.FIRST_FALLBACK,self.MAX_PREFERENCE_VALUE + 1):
-            if self.checkIfNodeTypePresent(self.fallbackPrivateIPs.get(i)):
+            if useHostColumn != False and self.checkIfNodeTypePresent(self.fallbackPrivateIPs.get(i)) or useHostColumn == False and self.checkIfNodeTypePresent(self.fallbackPublicIPs.get(i)):
                 servers = super().getPrivateOrPublicServers(useHostColumn, self.fallbackPrivateIPs.get(i), self.fallbackPublicIPs.get(i))
                 return servers
 
         if self.explicitFallbackOnly and self.loadBalance != 'prefer-primary' and self.loadBalance != 'prefer-rr':
             return []
             
-        if self.checkIfNodeTypePresent(self.fallbackPrivateIPs.get(self.REST_OF_CLUSTER)):
+        if useHostColumn != False and self.checkIfNodeTypePresent(self.fallbackPrivateIPs.get(self.REST_OF_CLUSTER)) or useHostColumn == False and self.checkIfNodeTypePresent(self.fallbackPublicIPs.get(self.REST_OF_CLUSTER)):
             servers = super().getPrivateOrPublicServers(useHostColumn, self.fallbackPrivateIPs.get(self.REST_OF_CLUSTER), self.fallbackPublicIPs.get(self.REST_OF_CLUSTER))
             return servers
         
