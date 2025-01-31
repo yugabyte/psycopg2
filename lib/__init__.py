@@ -142,7 +142,7 @@ def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
     return conn
 
 def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kwasync):
-    logger.info("getConnectionBalanced() called")
+    logger.debug("getConnectionBalanced() called")
     kwargs = lbprops.getStrippedProperties()
     loadbalancer = lbprops.getAppropriateLoadBalancer()
     dsn = lbprops.getStrippedDSN()
@@ -195,14 +195,14 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
                     return getConnectionBalanced(lbprops, connection_factory, cursor_factory, **kwasync)
                 return newconn
         except OperationalError:
-            logger.warning("Couldn\'t connect to "+ chosenHost+ " adding to failed list")
+            logger.warning("Couldn\'t connect to " + chosenHost + ", adding it to failed-hosts list")
             failedHosts.append(chosenHost)
             loadbalancer.updateFailedHosts(chosenHost)
             loadbalancer.setForRefresh()
             try :
                 newconn.close()
             except Exception:
-                logger.info('For cleanup purposes')
+                logger.debug('For cleanup purposes')
             chosenHost = loadbalancer.getLeastLoadedServer(failedHosts)
     
     return None

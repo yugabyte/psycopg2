@@ -100,7 +100,6 @@ class ClusterAwareLoadBalancer:
             chosenHost = minConnectionsHostList[idx]
         
         if chosenHost != '':
-            logger.debug("Host chosen for new connection: " + chosenHost)
             self.updateConnectionMap(chosenHost,1)
         elif self.useHostColumn == None:
             newList = []
@@ -222,7 +221,7 @@ class ClusterAwareLoadBalancer:
         if not currentHosts:
             if (self.loadBalance == 'prefer-primary' and not self.primaryNodes) or (self.loadBalance == 'prefer-rr' and not self.rrNodes):
                 currentHosts = self.getAppropriateHosts(privateHosts, True) if useHostColumn else self.getAppropriateHosts(publicHosts, True)
-        logger.debug("List of servers got: %s useHostColumn %s", currentHosts, useHostColumn)
+        logger.debug("List of servers got: %s, useHostColumn: %s", currentHosts, useHostColumn)
         return currentHosts
 
     def getAppropriateHosts(self, hosts, preferred):
@@ -521,8 +520,8 @@ class TopologyAwareLoadBalancer(ClusterAwareLoadBalancer):
                 if self.checkIfPresent(cp, self.allowedPlacements.get(i)):
                     logger.debug("Returning priority %d", i)
                     return i
-        logger.debug("CloudPlacement %s does not belong to Primary_Placement or any of the " +
-            "Fallback_Placements so returning %d as priority", cp, self.MAX_PREFERENCE_VALUE + 1)
+        logger.debug("CloudPlacement %s does not belong to primary placement or any of the " +
+            "fallback placements so returning %d as priority", cp, self.MAX_PREFERENCE_VALUE + 1)
         return self.MAX_PREFERENCE_VALUE + 1
 
     def updateFailedHosts(self, chosenHost):
