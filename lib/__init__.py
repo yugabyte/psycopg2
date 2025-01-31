@@ -82,6 +82,7 @@ del Decimal, Adapter
 import re
 import psycopg2.extensions
 import threading
+from psycopg2.logger import logger
 
 def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
     """
@@ -141,6 +142,7 @@ def connect(dsn=None, connection_factory=None, cursor_factory=None, **kwargs):
     return conn
 
 def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kwasync):
+    logger.debug("getConnectionBalanced() called")
     kwargs = lbprops.getStrippedProperties()
     loadbalancer = lbprops.getAppropriateLoadBalancer()
     dsn = lbprops.getStrippedDSN()
@@ -154,6 +156,7 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
         if cursor_factory is not None:
             controlConnection.cursor_factory = cursor_factory
         if not loadbalancer.refresh(controlConnection):
+            logger.warning("yb_servers() refresh failed in first attempt itself. Falling back to default behaviour")
             return None
         if chosenHost != '':
             loadbalancer.updateConnectionMap(chosenHost, -1)
@@ -179,26 +182,27 @@ def getConnectionBalanced(lbprops, connection_factory, cursor_factory=None, **kw
             if cursor_factory is not None:
                 newconn.cursor_factory = cursor_factory
             if not loadbalancer.refresh(newconn):
+                logger.warning("yb_servers() refresh returned no servers.")
                 loadbalancer.updateConnectionMap(chosenHost, -1)
                 failedHosts.append(chosenHost)
                 loadbalancer.setForRefresh()
             else:
                 better_node_available = loadbalancer.hasMorePreferredNodes(chosenHost)
                 if better_node_available:
-                    print('A higher-level node is available than the current chosenHost: ' + chosenHost)
+                    logger.debug("A higher-level node is available than the current chosenHost: " + chosenHost)
                     loadbalancer.decrementHostToNumConnCount(chosenHost)
                     newconn.close()
                     return getConnectionBalanced(lbprops, connection_factory, cursor_factory, **kwasync)
                 return newconn
         except OperationalError:
-            print('Couldn\'t connect to ', chosenHost, ' adding to failed list')
+            logger.warning("Couldn\'t connect to " + chosenHost + ", adding it to failed-hosts list")
             failedHosts.append(chosenHost)
             loadbalancer.updateFailedHosts(chosenHost)
             loadbalancer.setForRefresh()
             try :
                 newconn.close()
             except Exception:
-                print('For cleanup purposes')
+                logger.debug('For cleanup purposes')
             chosenHost = loadbalancer.getLeastLoadedServer(failedHosts)
     
     return None
